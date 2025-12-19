@@ -16,8 +16,7 @@ module SlackOutbox
     expects :attachments, type: Array, optional: true
     expects :thread_ts, type: String, optional: true
     expects :files, type: Array, optional: true, preprocess: lambda { |raw|
-      files_array = Array(raw).presence
-      files_array&.each_with_index&.map { |f, i| SlackOutbox::FileWrapper.wrap(f, i) }
+      Array(raw).presence&.each_with_index&.map { |f, i| SlackOutbox::FileWrapper.wrap(f, i) }
     }
 
     exposes :thread_ts, type: String
@@ -40,13 +39,22 @@ module SlackOutbox
     end
 
     on_exception(if: ::Slack::Web::Api::Errors::NotInChannel) do
-      handle_not_in_channel
-      # Exception will propagate; sidekiq_retry_in returns :discard, so no retries
+      send_error_notification <<~MSG
+        *Slack Error: Not In Channel*
+
+        Attempted to send message to <##{@resolved_channel}>, but Slackbot is not connected to channel.
+
+        _Instructions:_ https://stackoverflow.com/a/68475477
+      MSG
     end
 
     on_exception(if: ::Slack::Web::Api::Errors::ChannelNotFound) do
-      handle_channel_not_found
-      # Exception will propagate; sidekiq_retry_in returns :discard, so no retries
+      send_error_notification <<~MSG
+        *Slack Error: Channel Not Found*
+
+        Attempted to send message to <##{@resolved_channel}>, but channel was not found.
+        Check if channel was renamed or deleted.
+      MSG
     end
 
     before do
@@ -176,45 +184,16 @@ module SlackOutbox
 
     # Implementation helpers - sending errors
 
-    # Error handlers - send notification then re-raise
-    # sidekiq_retry_in will discard these (no retries)
-    def handle_not_in_channel
-      error_message = <<~MSG
-        *Slack Error: Not In Channel*
-
-        Attempted to send message to <##{@resolved_channel}>, but Slackbot is not connected to channel.
-
-        _Instructions:_ https://stackoverflow.com/a/68475477
-
-        _Original message:_
-        > #{text || "(blocks/attachments only)"}
-      MSG
-
-      send_error_notification(error_message)
-    end
-
-    def handle_channel_not_found
-      error_message = <<~MSG
-        *Slack Error: Channel Not Found*
-
-        Attempted to send message to <##{@resolved_channel}>, but channel was not found.
-        Check if channel was renamed or deleted.
-
-        _Original message:_
-        > #{text || "(blocks/attachments only)"}
-      MSG
-
-      send_error_notification(error_message)
-    end
-
     def send_error_notification(message)
-      if error_channel.blank?
-        warn "** SLACK MESSAGE SEND FAILED (AND NO ERROR CHANNEL CONFIGURED) **. Message: #{message}"
-        return
-      end
+      message += "\n\n_Original message:_ \n> #{text.presence || "(blocks/attachments only)"}"
 
-      # Avoid infinite loop if error_channel itself has issues
-      return if @resolved_channel == error_channel
+      detail = if error_channel.blank?
+                 "NO ERROR CHANNEL CONFIGURED"
+               elsif @resolved_channel == error_channel
+                 "WHILE ATTEMPTING TO SEND TO CONFIGURED ERROR CHANNEL (#{error_channel})"
+               end
+
+      return warn("** SLACK MESSAGE SEND FAILED (#{detail}) **. Message: #{message}") if detail.present?
 
       # Send directly, don't use call_async to avoid Sidekiq queue
       self.class.call!(profile:, channel: error_channel, text: message)
