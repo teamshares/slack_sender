@@ -45,6 +45,8 @@ module SlackOutbox
           SlackOutbox.config.error_notifier.call(e, context: { original_error_message: message })
         elsif defined?(Honeybadger)
           Honeybadger.notify(e, context: { original_error_message: message })
+        else
+          warn("** SLACK MESSAGE SEND FAILED (WHILE REPORTING ERROR) **. \nException: #{e.class} - #{e.message}\nMessage: #{message}")
         end
       end
     end
