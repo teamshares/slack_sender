@@ -11,4 +11,3 @@ module SlackOutbox
     # def dev_channel = CHANNELS[:slack_development] # TODO: HealthInsurance needs a slack_development channel
   end
 end
-

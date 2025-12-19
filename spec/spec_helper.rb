@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require "bundler/setup"
+require "sidekiq"
+Bundler.require(:default, :development)
+
 require "slack_outbox"
 
 RSpec.configure do |config|
@@ -13,4 +17,3 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
 end
-

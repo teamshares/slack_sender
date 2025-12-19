@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 RSpec.describe SlackOutbox::OS do
-  let(:client_dbl) { instance_double(::Slack::Web::Client) }
+  let(:client_dbl) { instance_double(Slack::Web::Client) }
 
   before do
-    allow(::Slack::Web::Client).to receive(:new).and_return(client_dbl)
+    allow(Slack::Web::Client).to receive(:new).and_return(client_dbl)
     allow(client_dbl).to receive(:chat_postMessage).and_return({ "ts" => "123" })
+    # Stub the ENV fetch since this token may not exist in test env
+    allow(ENV).to receive(:fetch).with("SLACK_API_TOKEN").and_return("xoxb-test-token")
   end
 
   describe "configuration" do
@@ -16,7 +18,7 @@ RSpec.describe SlackOutbox::OS do
     it "uses SLACK_API_TOKEN for slack_token" do
       # Verify the token env var name is correct by checking the client is created
       # The actual token value comes from doppler/ENV in test environment
-      expect(::Slack::Web::Client).to receive(:new).with(hash_including(:token))
+      expect(Slack::Web::Client).to receive(:new).with(hash_including(:token))
 
       described_class.call(channel: :slack_development, text: "test")
     end
@@ -35,13 +37,13 @@ RSpec.describe SlackOutbox::OS do
       call_count = 0
       allow(client_dbl).to receive(:chat_postMessage) do |args|
         call_count += 1
-        raise ::Slack::Web::Api::Errors::NotInChannel, "not_in_channel" if call_count == 1
+        raise Slack::Web::Api::Errors::NotInChannel, "not_in_channel" if call_count == 1
 
         expect(args[:channel]).to eq(described_class::CHANNELS[:eng_alerts])
         { "ts" => "123" }
       end
 
-      expect { described_class.call!(channel: "C_OTHER", text: "test") }.to raise_error(::Slack::Web::Api::Errors::NotInChannel)
+      expect { described_class.call!(channel: "C_OTHER", text: "test") }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
     end
   end
 
@@ -66,4 +68,3 @@ RSpec.describe SlackOutbox::OS do
     it { expect(described_class::USER_GROUPS).to include(:slack_development) }
   end
 end
-

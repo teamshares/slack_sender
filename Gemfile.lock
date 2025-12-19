@@ -2,7 +2,7 @@ PATH
   remote: .
   specs:
     slack_outbox (0.1.0)
-      axn
+      axn (= 0.1.0.pre.alpha.3)
       slack-ruby-client
 
 GEM
@@ -78,12 +78,15 @@ GEM
       date
       stringio
     racc (1.8.1)
+    rack (3.2.4)
     rainbow (3.1.1)
     rake (13.3.1)
     rdoc (7.0.1)
       erb
       psych (>= 4.0.0)
       tsort
+    redis-client (0.26.2)
+      connection_pool
     regexp_parser (2.11.3)
     reline (0.6.3)
       io-console (~> 0.5)
@@ -116,6 +119,12 @@ GEM
       prism (~> 1.4)
     ruby-progressbar (1.13.0)
     securerandom (0.4.1)
+    sidekiq (8.1.0)
+      connection_pool (>= 3.0.0)
+      json (>= 2.16.0)
+      logger (>= 1.7.0)
+      rack (>= 3.2.0)
+      redis-client (>= 0.26.0)
     slack-ruby-client (3.1.0)
       faraday (>= 2.0.1)
       faraday-mashify
@@ -141,6 +150,7 @@ DEPENDENCIES
   rake (~> 13.0)
   rspec (~> 3.0)
   rubocop (~> 1.21)
+  sidekiq
   slack_outbox!
 
 BUNDLED WITH

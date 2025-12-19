@@ -34,4 +34,3 @@ module SlackOutbox
     def error_channel = CHANNELS[:eng_alerts]
   end
 end
-

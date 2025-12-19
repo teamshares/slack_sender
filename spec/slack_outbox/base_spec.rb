@@ -5,11 +5,13 @@ RSpec.describe SlackOutbox::Base do
   let(:action_class) { SlackOutbox::OS }
   let(:channel) { "C01H3KU3B9P" }
   let(:text) { "Hello, World!" }
-  let(:client_dbl) { instance_double(::Slack::Web::Client) }
+  let(:client_dbl) { instance_double(Slack::Web::Client) }
 
   before do
-    allow(::Slack::Web::Client).to receive(:new).and_return(client_dbl)
+    allow(Slack::Web::Client).to receive(:new).and_return(client_dbl)
     allow(client_dbl).to receive(:chat_postMessage).and_return({ "ts" => "1234567890.123456" })
+    # Stub the ENV fetch since this token may not exist in test env
+    allow(ENV).to receive(:fetch).with("SLACK_API_TOKEN").and_return("xoxb-test-token")
   end
 
   describe "expects" do
@@ -61,7 +63,7 @@ RSpec.describe SlackOutbox::Base do
         subject(:result) { action_class.call(channel:, text: "Hello *world*") }
 
         it "formats text using Slack markdown formatting" do
-          expect(::Slack::Messages::Formatting).to receive(:markdown).with("Hello *world*").and_call_original
+          expect(Slack::Messages::Formatting).to receive(:markdown).with("Hello *world*").and_call_original
           expect(result).to be_ok
         end
       end
@@ -170,10 +172,10 @@ RSpec.describe SlackOutbox::Base do
       let(:files) { [file] }
 
       before do
-        allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "f_123" }] }) # rubocop:disable Naming/VariableNumber
+        allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "f_123" }] })
         allow(client_dbl).to receive(:files_info).and_return({
-          "file" => { "shares" => { "public" => { channel => [{ "ts" => "123.456" }] } } },
-        })
+                                                               "file" => { "shares" => { "public" => { channel => [{ "ts" => "123.456" }] } } },
+                                                             })
       end
 
       context "with blocks" do
@@ -279,10 +281,10 @@ RSpec.describe SlackOutbox::Base do
         file.write("file content")
         file.rewind
         allow(SlackOutbox.config).to receive(:in_production?).and_return(true)
-        allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "f_123" }] }) # rubocop:disable Naming/VariableNumber
+        allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "f_123" }] })
         allow(client_dbl).to receive(:files_info).and_return({
-          "file" => { "shares" => { "public" => { channel => [{ "ts" => "123.456" }] } } },
-        })
+                                                               "file" => { "shares" => { "public" => { channel => [{ "ts" => "123.456" }] } } },
+                                                             })
       end
 
       after do
@@ -291,7 +293,7 @@ RSpec.describe SlackOutbox::Base do
       end
 
       it "calls files_upload_v2" do
-        expect(client_dbl).to receive(:files_upload_v2).with( # rubocop:disable Naming/VariableNumber
+        expect(client_dbl).to receive(:files_upload_v2).with(
           files: [hash_including(content: "file content")],
           channel:,
           initial_comment: "File attached",
@@ -307,8 +309,8 @@ RSpec.describe SlackOutbox::Base do
       context "with private channel shares" do
         before do
           allow(client_dbl).to receive(:files_info).and_return({
-            "file" => { "shares" => { "private" => { channel => [{ "ts" => "private.ts" }] } } },
-          })
+                                                                 "file" => { "shares" => { "private" => { channel => [{ "ts" => "private.ts" }] } } },
+                                                               })
         end
 
         it "finds thread_ts from private shares" do
@@ -331,14 +333,14 @@ RSpec.describe SlackOutbox::Base do
 
           allow(client_dbl).to receive(:chat_postMessage) do |args|
             call_count += 1
-            raise ::Slack::Web::Api::Errors::NotInChannel, "not_in_channel" if call_count == 1
+            raise Slack::Web::Api::Errors::NotInChannel, "not_in_channel" if call_count == 1
 
             expect(args[:channel]).to eq(error_channel)
             expect(args[:text]).to include("Not In Channel")
             { "ts" => "123" }
           end
 
-          expect { result }.to raise_error(::Slack::Web::Api::Errors::NotInChannel)
+          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
         end
       end
 
@@ -349,12 +351,12 @@ RSpec.describe SlackOutbox::Base do
           call_count = 0
           allow(client_dbl).to receive(:chat_postMessage) do |_args|
             call_count += 1
-            raise ::Slack::Web::Api::Errors::ChannelNotFound, "channel_not_found" if call_count == 1
+            raise Slack::Web::Api::Errors::ChannelNotFound, "channel_not_found" if call_count == 1
 
             { "ts" => "123" }
           end
 
-          expect { result }.to raise_error(::Slack::Web::Api::Errors::ChannelNotFound)
+          expect { result }.to raise_error(Slack::Web::Api::Errors::ChannelNotFound)
         end
       end
 
@@ -363,13 +365,13 @@ RSpec.describe SlackOutbox::Base do
 
         it "does not attempt recursive error notification" do
           allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            ::Slack::Web::Api::Errors::NotInChannel.new("not_in_channel"),
+            Slack::Web::Api::Errors::NotInChannel.new("not_in_channel"),
           )
 
           # Should only be called once (the original message, not error notification)
           expect(client_dbl).to receive(:chat_postMessage).once
 
-          expect { result }.to raise_error(::Slack::Web::Api::Errors::NotInChannel)
+          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
         end
       end
 
@@ -379,14 +381,14 @@ RSpec.describe SlackOutbox::Base do
         before do
           allow_any_instance_of(action_class).to receive(:error_channel).and_return(nil)
           allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            ::Slack::Web::Api::Errors::NotInChannel.new("not_in_channel"),
+            Slack::Web::Api::Errors::NotInChannel.new("not_in_channel"),
           )
         end
 
         it "logs warning instead of sending slack notification" do
           expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED/)
 
-          expect { result }.to raise_error(::Slack::Web::Api::Errors::NotInChannel)
+          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
         end
       end
     end
@@ -442,4 +444,3 @@ RSpec.describe SlackOutbox::Base do
     end
   end
 end
-

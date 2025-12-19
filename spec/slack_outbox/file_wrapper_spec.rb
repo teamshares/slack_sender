@@ -1,6 +1,19 @@
 # frozen_string_literal: true
 
 RSpec.describe SlackOutbox::FileWrapper do
+  before do
+    unless defined?(ActiveStorage::Filename)
+      stub_const("ActiveStorage::Filename", Class.new do
+        def initialize(name)
+          @name = name
+        end
+
+        def to_s
+          @name
+        end
+      end)
+    end
+  end
   describe ".wrap" do
     it "creates a new FileWrapper instance" do
       file = StringIO.new("content")
@@ -219,4 +232,3 @@ RSpec.describe SlackOutbox::FileWrapper do
     end
   end
 end
-

@@ -2,11 +2,7 @@
 
 module SlackOutbox
   class Configuration
-    attr_writer :error_notifier
-
-    def in_production=(value)
-      @in_production = value
-    end
+    attr_writer :in_production
 
     def in_production?
       return @in_production unless @in_production.nil?
@@ -18,9 +14,7 @@ module SlackOutbox
       end
     end
 
-    def error_notifier
-      @error_notifier
-    end
+    attr_accessor :error_notifier
   end
 
   class << self
@@ -32,4 +26,3 @@ module SlackOutbox
     end
   end
 end
-

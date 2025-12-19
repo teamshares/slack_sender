@@ -14,4 +14,3 @@ module SlackOutbox
     def dev_channel = CHANNELS[:slack_development]
   end
 end
-

@@ -7,10 +7,10 @@ module SlackOutbox
 
     def self.format_group_mention(key, non_production = nil)
       group_id = if key.is_a?(Symbol)
-        self::USER_GROUPS[key] || raise("Unknown user group: #{key}")
-      else
-        key
-      end
+                   self::USER_GROUPS[key] || raise("Unknown user group: #{key}")
+                 else
+                   key
+                 end
 
       group_id = non_production.presence || self::USER_GROUPS[:slack_development] unless SlackOutbox.config.in_production?
 
@@ -20,19 +20,19 @@ module SlackOutbox
     include Axn
 
     expects :channel # Symbol or String - resolved in before block
-    expects :text, type: String, optional: true, preprocess: ->(txt) do
+    expects :text, type: String, optional: true, preprocess: lambda { |txt|
       ::Slack::Messages::Formatting.markdown(txt) if txt.present?
-    end
-    expects :icon_emoji, type: String, optional: true, preprocess: ->(raw) do
+    }
+    expects :icon_emoji, type: String, optional: true, preprocess: lambda { |raw|
       ":#{raw}:".squeeze(":") if raw.present?
-    end
+    }
     expects :blocks, type: Array, optional: true
     expects :attachments, type: Array, optional: true
     expects :thread_ts, type: String, optional: true
-    expects :files, type: Array, optional: true, preprocess: ->(raw) do
+    expects :files, type: Array, optional: true, preprocess: lambda { |raw|
       files_array = Array(raw).presence
       files_array&.each_with_index&.map { |f, i| SlackOutbox::FileWrapper.wrap(f, i) }
-    end
+    }
 
     exposes :thread_ts, type: String
 
@@ -84,7 +84,9 @@ module SlackOutbox
     end
 
     def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank?
-    memo def client = ::Slack::Web::Client.new(slack_client_config.merge(token: slack_token))
+
+    # TODO: just use memo once we update Axn
+    def client = @client ||= ::Slack::Web::Client.new(slack_client_config.merge(token: slack_token))
 
     def upload_files
       file_uploads = files.map(&:to_h)
@@ -100,7 +102,7 @@ module SlackOutbox
 
       file_info = client.files_info(file: file_id)
       ts = file_info.dig("file", "shares", "public", channel_for_environment, 0, "ts") ||
-        file_info.dig("file", "shares", "private", channel_for_environment, 0, "ts")
+           file_info.dig("file", "shares", "private", channel_for_environment, 0, "ts")
       expose thread_ts: ts if ts
     end
 
@@ -157,7 +159,7 @@ module SlackOutbox
         _Instructions:_ https://stackoverflow.com/a/68475477
 
         _Original message:_
-        > #{text || '(blocks/attachments only)'}
+        > #{text || "(blocks/attachments only)"}
       MSG
 
       send_error_notification(error_message)
@@ -171,7 +173,7 @@ module SlackOutbox
         Check if channel was renamed or deleted.
 
         _Original message:_
-        > #{text || '(blocks/attachments only)'}
+        > #{text || "(blocks/attachments only)"}
       MSG
 
       send_error_notification(error_message)
@@ -198,4 +200,3 @@ module SlackOutbox
     end
   end
 end
-

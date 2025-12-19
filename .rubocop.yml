@@ -1,8 +1,72 @@
 AllCops:
-  TargetRubyVersion: 3.1
+  TargetRubyVersion: 3.2
+  NewCops: enable
+  SuggestExtensions: false
+
+Style/MultilineBlockChain:
+  Enabled: false
+
+Style/SingleLineMethods:
+  Enabled: false
 
 Style/StringLiterals:
+  Enabled: true
   EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
+  Enabled: true
   EnforcedStyle: double_quotes
+
+Style/Documentation:
+  Enabled: false
+
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: comma
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: comma
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: comma
+
+Style/HashSyntax:
+  EnforcedShorthandSyntax: always
+
+Naming/MemoizedInstanceVariableName:
+  Enabled: false
+
+Style/ClassAndModuleChildren:
+  Enabled: false
+
+Style/DoubleNegation:
+  Enabled: false
+
+Naming/MethodParameterName:
+  AllowedNames: e, on, id, if, as
+
+Metrics/BlockLength:
+  Exclude:
+    - 'spec/**/*'
+    - slack_outbox.gemspec
+
+Metrics/ClassLength:
+  Max: 150
+
+Layout/MethodLength:
+  Max: 15
+
+Layout/LineLength:
+  Max: 160
+
+Naming/VariableNumber:
+  Exclude:
+    - 'spec/**/*'
+
+Metrics/PerceivedComplexity:
+  Max: 20
+
+Metrics/AbcSize:
+  Max: 21
+
+Metrics/CyclomaticComplexity:
+  Max: 20
