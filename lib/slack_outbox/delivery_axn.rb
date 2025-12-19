@@ -82,7 +82,7 @@ module SlackOutbox
 
     private
 
-    def slack_client_config = {}
+    def slack_client_config = profile.slack_client_config
     def dev_channel = profile.dev_channel
     def error_channel = profile.error_channel
 
