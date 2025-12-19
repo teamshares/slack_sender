@@ -447,7 +447,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
     end
   end
 
-  describe "test_message_wrapper" do
+  describe "text_to_use" do
     subject(:result) { action_class.call(profile:, channel:, text: "Line 1\nLine 2\nLine 3") }
 
     before do

@@ -82,11 +82,49 @@ module SlackOutbox
 
     private
 
+    # TODO: just use memo once we update Axn
+    def client = @client ||= ::Slack::Web::Client.new(slack_client_config.merge(token: profile.token))
+
+    # Profile configs
+
     def slack_client_config = profile.slack_client_config
     def dev_channel = profile.dev_channel
     def error_channel = profile.error_channel
 
-    # Implementation helpers
+    # Core sending methods
+
+    def upload_files
+      file_uploads = files.map(&:to_h)
+      response = client.files_upload_v2(
+        files: file_uploads,
+        channel: channel_to_use,
+        initial_comment: text_to_use,
+      )
+
+      # files_upload_v2 doesn't return thread_ts directly, so we fetch it via files.info
+      file_id = response.dig("files", 0, "id")
+      return unless file_id
+
+      file_info = client.files_info(file: file_id)
+      ts = file_info.dig("file", "shares", "public", channel_to_use, 0, "ts") ||
+           file_info.dig("file", "shares", "private", channel_to_use, 0, "ts")
+      expose thread_ts: ts if ts
+    end
+
+    def post_message
+      response = client.chat_postMessage(
+        channel: channel_to_use,
+        text: text_to_use,
+        blocks:,
+        attachments:,
+        icon_emoji:,
+        thread_ts:,
+      )
+      expose thread_ts: response["ts"]
+    end
+
+    # Implementation helpers - parsing inputs
+
     def resolve_channel(raw)
       return raw unless raw.is_a?(Symbol)
 
@@ -95,38 +133,7 @@ module SlackOutbox
 
     def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank?
 
-    # TODO: just use memo once we update Axn
-    def client = @client ||= ::Slack::Web::Client.new(slack_client_config.merge(token: profile.token))
-
-    def upload_files
-      file_uploads = files.map(&:to_h)
-      response = client.files_upload_v2(
-        files: file_uploads,
-        channel: channel_for_environment,
-        initial_comment: text_for_environment,
-      )
-
-      # files_upload_v2 doesn't return thread_ts directly, so we fetch it via files.info
-      file_id = response.dig("files", 0, "id")
-      return unless file_id
-
-      file_info = client.files_info(file: file_id)
-      ts = file_info.dig("file", "shares", "public", channel_for_environment, 0, "ts") ||
-           file_info.dig("file", "shares", "private", channel_for_environment, 0, "ts")
-      expose thread_ts: ts if ts
-    end
-
-    def post_message
-      response = client.chat_postMessage(
-        channel: channel_for_environment,
-        text: text_for_environment,
-        blocks:,
-        attachments:,
-        icon_emoji:,
-        thread_ts:,
-      )
-      expose thread_ts: response["ts"]
-    end
+    # Implementation helpers - validating inputs
 
     def blocks_valid?
       return false if blocks.blank?
@@ -139,21 +146,20 @@ module SlackOutbox
       false
     end
 
-    def channel_for_environment
+    # Implementation helpers - environmentally-aware handling
+
+    # TODO: just use memo once we update Axn
+    def channel_to_use
       return @resolved_channel if SlackOutbox.config.in_production?
       return dev_channel if dev_channel.present?
 
       @resolved_channel
     end
 
-    def text_for_environment
-      return text if SlackOutbox.config.in_production?
-      return nil if text.blank?
+    # TODO: just use memo once we update Axn
+    def text_to_use
+      return text if SlackOutbox.config.in_production? || dev_channel.blank?
 
-      test_message_wrapper
-    end
-
-    def test_message_wrapper
       formatted_message = text.lines.map { |line| "> #{line}" }.join
 
       <<~TEXT.strip
@@ -162,6 +168,8 @@ module SlackOutbox
         #{formatted_message}
       TEXT
     end
+
+    # Implementation helpers - sending errors
 
     # Error handlers - send notification then re-raise
     # sidekiq_retry_in will discard these (no retries)
