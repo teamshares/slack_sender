@@ -2,7 +2,9 @@
 
 module SlackOutbox
   class Configuration
-    attr_writer :in_production
+    SUPPORTED_ASYNC_BACKENDS = [:sidekiq, :active_job].freeze
+
+    attr_writer :in_production, :async_backend
 
     def in_production?
       return @in_production unless @in_production.nil?
@@ -12,6 +14,40 @@ module SlackOutbox
       else
         false
       end
+    end
+
+    def async_backend
+      @async_backend ||= detect_default_async_backend
+    end
+
+    def async_backend=(value)
+      if value && !SUPPORTED_ASYNC_BACKENDS.include?(value)
+        raise ArgumentError, "Unsupported async backend: #{value.inspect}. Supported backends: #{SUPPORTED_ASYNC_BACKENDS.inspect}. Please update SlackOutbox to support this backend."
+      end
+      @async_backend = value
+    end
+
+    def async_backend_available?
+      backend = async_backend
+      return false unless backend
+
+      case backend
+      when :sidekiq
+        defined?(Sidekiq) && defined?(Sidekiq::Job)
+      when :active_job
+        defined?(ActiveJob) && defined?(ActiveJob::Base)
+      else
+        false
+      end
+    end
+
+    private
+
+    def detect_default_async_backend
+      return :sidekiq if defined?(Sidekiq) && defined?(Sidekiq::Job)
+      return :active_job if defined?(ActiveJob) && defined?(ActiveJob::Base)
+
+      nil
     end
 
     attr_accessor :error_notifier, :max_background_file_size

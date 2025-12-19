@@ -2,6 +2,7 @@
 
 module SlackOutbox
   class DeliveryAxn
+    extend ActiveSupport::Concern
     include Axn
 
     expects :profile, type: Profile
@@ -21,22 +22,56 @@ module SlackOutbox
 
     exposes :thread_ts, type: String
 
-    async :sidekiq, retry: 5, dead: false
+    class_methods do
+      def _configure_async_backend
+        backend = SlackOutbox.config.async_backend
 
-    sidekiq_retry_in do |_count, exception|
-      # Discard known-do-not-retry exceptions
-      return :discard if exception.is_a?(::Slack::Web::Api::Errors::NotInChannel)
-      return :discard if exception.is_a?(::Slack::Web::Api::Errors::ChannelNotFound)
+        # No backend configured - will raise error when deliver is called
+        return unless backend
 
-      # Check for retry headers from Slack (e.g., rate limits)
-      if exception.respond_to?(:response_headers) && exception.response_headers.is_a?(Hash)
-        retry_after = exception.response_headers["Retry-After"] || exception.response_headers["retry-after"]
-        return retry_after.to_i if retry_after.present?
+        unless SlackOutbox::Configuration::SUPPORTED_ASYNC_BACKENDS.include?(backend)
+          raise ArgumentError,
+                "Unsupported async backend: #{backend.inspect}. Supported backends: #{SlackOutbox::Configuration::SUPPORTED_ASYNC_BACKENDS.inspect}. Please update SlackOutbox to support this backend."
+        end
+
+        case backend
+        when :sidekiq
+          async :sidekiq, retry: 5, dead: false
+          # Configure Sidekiq-specific retry logic
+          if defined?(Sidekiq::Job) && respond_to?(:sidekiq_retry_in)
+            sidekiq_retry_in do |_count, exception|
+              SlackOutbox::Util.parse_retry_delay_from_slack_exception(exception)
+            end
+          end
+        when :active_job
+          async :active_job do
+            retry_on StandardError, wait: :exponentially_longer, attempts: 5 do |_job, exception|
+              retry_behavior = SlackOutbox::Util.parse_retry_delay_from_slack_exception(exception)
+              next if retry_behavior == :discard
+
+              # If retry_behavior is a number (seconds), schedule retry with that delay
+              retry_job wait: retry_behavior.seconds if retry_behavior.is_a?(Numeric) && retry_behavior.positive?
+              # Otherwise, let ActiveJob use its default retry behavior
+            end
+          end
+        end
       end
 
-      # Default: let Sidekiq use its default retry behavior
-      nil
+      def format_group_mention(profile, key, non_production = nil)
+        group_id = if key.is_a?(Symbol)
+                     profile.user_groups[key] || raise("Unknown user group: #{key}")
+                   else
+                     key
+                   end
+
+        group_id = non_production.presence || profile.user_groups[:slack_development] unless SlackOutbox.config.in_production?
+
+        ::Slack::Messages::Formatting.group_link(group_id)
+      end
     end
+
+    # Configure async backend dynamically based on SlackOutbox.config
+    _configure_async_backend
 
     on_exception(if: ::Slack::Web::Api::Errors::NotInChannel) do
       send_error_notification <<~MSG
@@ -74,18 +109,6 @@ module SlackOutbox
 
     def call
       files.present? ? upload_files : post_message
-    end
-
-    def self.format_group_mention(profile, key, non_production = nil)
-      group_id = if key.is_a?(Symbol)
-                   profile.user_groups[key] || raise("Unknown user group: #{key}")
-                 else
-                   key
-                 end
-
-      group_id = non_production.presence || profile.user_groups[:slack_development] unless SlackOutbox.config.in_production?
-
-      ::Slack::Messages::Formatting.group_link(group_id)
     end
 
     private

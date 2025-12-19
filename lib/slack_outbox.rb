@@ -1,15 +1,22 @@
 # frozen_string_literal: true
 
 require "active_support/core_ext/object/blank"
+require "active_support/concern"
 require "slack-ruby-client"
 begin
   require "sidekiq"
 rescue LoadError
   # Sidekiq is optional for runtime, only needed for async operations
 end
+begin
+  require "active_job"
+rescue LoadError
+  # ActiveJob is optional for runtime, only needed for async operations
+end
 require "axn"
 require_relative "slack_outbox/version"
 require_relative "slack_outbox/configuration"
+require_relative "slack_outbox/util"
 
 module SlackOutbox
   class Error < StandardError; end

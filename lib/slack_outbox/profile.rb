@@ -15,6 +15,11 @@ module SlackOutbox
     end
 
     def deliver(**kwargs) # rubocop:disable Naming/PredicateMethod
+      # Validate async backend is configured and available
+      unless SlackOutbox.config.async_backend_available?
+        raise Error, "No async backend configured. Use SlackOutbox.deliver! to execute inline, or configure an async backend (sidekiq or active_job) via SlackOutbox.config.async_backend to enable automatic retries for failed Slack sends."
+      end
+
       # Only relevant before we send to the backend -- avoid filling redis with large files
       if kwargs[:files].present?
         total_file_size = MultiFileWrapper.new(kwargs[:files]).total_file_size

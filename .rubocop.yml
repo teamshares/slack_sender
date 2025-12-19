@@ -45,6 +45,7 @@ Naming/MethodParameterName:
   AllowedNames: e, on, id, if, as
 
 Metrics/BlockLength:
+  Max: 50
   Exclude:
     - 'spec/**/*'
     - slack_outbox.gemspec
@@ -53,7 +54,7 @@ Metrics/ClassLength:
   Max: 150
 
 Metrics/MethodLength:
-  Max: 15
+  Max: 25
 
 Layout/LineLength:
   Max: 160
