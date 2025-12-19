@@ -77,3 +77,4 @@ module SlackOutbox
     end
   end
 end
+
