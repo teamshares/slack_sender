@@ -92,4 +92,93 @@ RSpec.describe SlackOutbox::Profile do
       expect(profile.deliver!(channel: "C123", text: "test")).to eq("123.456")
     end
   end
+
+  describe "#format_group_mention" do
+    before do
+      allow(SlackOutbox.config).to receive(:in_production?).and_return(production?)
+    end
+
+    context "in production" do
+      let(:production?) { true }
+
+      context "with symbol key" do
+        let(:profile) do
+          described_class.new(
+            token: "SLACK_API_TOKEN",
+            user_groups: { eng_team: "S123ABC" },
+            channels: {},
+          )
+        end
+
+        it "returns formatted group link for user group symbol" do
+          result = profile.format_group_mention(:eng_team)
+
+          expect(result).to eq("<!subteam^S123ABC>")
+        end
+      end
+
+      context "with string ID" do
+        it "returns formatted group link for string ID" do
+          result = profile.format_group_mention("S123ABC")
+
+          expect(result).to eq("<!subteam^S123ABC>")
+        end
+      end
+
+      context "with unknown symbol key" do
+        it "raises error" do
+          expect { profile.format_group_mention(:unknown_group) }.to raise_error("Unknown user group: unknown_group")
+        end
+      end
+    end
+
+    context "not in production" do
+      let(:production?) { false }
+
+      context "with symbol key" do
+        let(:profile) do
+          described_class.new(
+            token: "SLACK_API_TOKEN",
+            user_groups: {
+              eng_team: "S123ABC",
+              slack_development: "S_DEV_GROUP",
+            },
+            channels: {},
+          )
+        end
+
+        it "returns dev group link instead of requested group" do
+          result = profile.format_group_mention(:eng_team)
+
+          expect(result).to eq("<!subteam^S_DEV_GROUP>")
+        end
+      end
+
+      context "with string ID" do
+        it "returns dev group link instead of requested ID" do
+          result = profile.format_group_mention("S123ABC")
+
+          expect(result).to eq("<!subteam^#{profile.user_groups[:slack_development]}>")
+        end
+      end
+
+      context "when slack_development user group is not configured" do
+        let(:profile) do
+          described_class.new(
+            token: "SLACK_API_TOKEN",
+            user_groups: { eng_team: "S123ABC" },
+            channels: {},
+          )
+        end
+
+        it "uses nil group_id and formats it as empty subteam link" do
+          result = profile.format_group_mention(:eng_team)
+
+          # When slack_development is missing, group_id becomes nil
+          # Slack::Messages::Formatting.group_link(nil) returns "<!subteam^>"
+          expect(result).to eq("<!subteam^>")
+        end
+      end
+    end
+  end
 end

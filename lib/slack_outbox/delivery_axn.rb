@@ -1,9 +1,21 @@
 # frozen_string_literal: true
 
+require_relative "delivery_axn/async_configuration"
+require_relative "delivery_axn/exception_handlers"
+require_relative "delivery_axn/validation"
+require_relative "delivery_axn/channel_resolution"
+
 module SlackOutbox
   class DeliveryAxn
-    extend ActiveSupport::Concern
     include Axn
+
+    # Class method modules (extend)
+    extend AsyncConfiguration
+
+    # Instance method modules (include)
+    include ExceptionHandlers
+    include Validation
+    include ChannelResolution
 
     expects :profile, type: Profile
     expects :channel # Symbol or String - resolved in before block
@@ -22,91 +34,6 @@ module SlackOutbox
 
     exposes :thread_ts, type: String
 
-    class_methods do
-      def _configure_async_backend
-        backend = SlackOutbox.config.async_backend
-
-        # No backend configured - will raise error when deliver is called
-        return unless backend
-
-        unless SlackOutbox::Configuration::SUPPORTED_ASYNC_BACKENDS.include?(backend)
-          raise ArgumentError,
-                "Unsupported async backend: #{backend.inspect}. Supported backends: #{SlackOutbox::Configuration::SUPPORTED_ASYNC_BACKENDS.inspect}. Please update SlackOutbox to support this backend."
-        end
-
-        case backend
-        when :sidekiq
-          async :sidekiq, retry: 5, dead: false
-          # Configure Sidekiq-specific retry logic
-          if defined?(Sidekiq::Job) && respond_to?(:sidekiq_retry_in)
-            sidekiq_retry_in do |_count, exception|
-              SlackOutbox::Util.parse_retry_delay_from_slack_exception(exception)
-            end
-          end
-        when :active_job
-          async :active_job do
-            retry_on StandardError, wait: :exponentially_longer, attempts: 5 do |_job, exception|
-              retry_behavior = SlackOutbox::Util.parse_retry_delay_from_slack_exception(exception)
-              next if retry_behavior == :discard
-
-              # If retry_behavior is a number (seconds), schedule retry with that delay
-              retry_job wait: retry_behavior.seconds if retry_behavior.is_a?(Numeric) && retry_behavior.positive?
-              # Otherwise, let ActiveJob use its default retry behavior
-            end
-          end
-        end
-      end
-
-      def format_group_mention(profile, key, non_production = nil)
-        group_id = if key.is_a?(Symbol)
-                     profile.user_groups[key] || raise("Unknown user group: #{key}")
-                   else
-                     key
-                   end
-
-        group_id = non_production.presence || profile.user_groups[:slack_development] unless SlackOutbox.config.in_production?
-
-        ::Slack::Messages::Formatting.group_link(group_id)
-      end
-    end
-
-    # Configure async backend dynamically based on SlackOutbox.config
-    _configure_async_backend
-
-    on_exception(if: ::Slack::Web::Api::Errors::NotInChannel) do
-      send_error_notification <<~MSG
-        *Slack Error: Not In Channel*
-
-        Attempted to send message to <##{@resolved_channel}>, but Slackbot is not connected to channel.
-
-        _Instructions:_ https://stackoverflow.com/a/68475477
-      MSG
-    end
-
-    on_exception(if: ::Slack::Web::Api::Errors::ChannelNotFound) do
-      send_error_notification <<~MSG
-        *Slack Error: Channel Not Found*
-
-        Attempted to send message to <##{@resolved_channel}>, but channel was not found.
-        Check if channel was renamed or deleted.
-      MSG
-    end
-
-    before do
-      # Resolve channel symbol to ID using profile's channels
-      @resolved_channel = resolve_channel(channel)
-      fail! "channel must resolve to a String" unless @resolved_channel.is_a?(String)
-
-      fail! "Must provide at least one of: text, blocks, attachments, or files" if content_blank?
-      fail! "Provided blocks were invalid" if blocks.present? && !blocks_valid?
-
-      if files.present?
-        fail! "Cannot provide files with blocks" if blocks.present?
-        fail! "Cannot provide files with attachments" if attachments.present?
-        fail! "Cannot provide files with icon_emoji" if icon_emoji.present?
-      end
-    end
-
     def call
       files.present? ? upload_files : post_message
     end
@@ -117,18 +44,11 @@ module SlackOutbox
     def client = @client ||= ::Slack::Web::Client.new(slack_client_config.merge(token: profile.token))
 
     # Profile configs
-
     def slack_client_config = profile.slack_client_config
     def error_channel = profile.error_channel
     def dev_channel = profile.dev_channel
-    def default_dev_channel_redirect_prefix = "_:test_tube: This is a test. Would have been sent to %s in production. :test_tube:"
-
-    def dev_channel_redirect_prefix
-      format(profile.dev_channel_redirect_prefix.presence || default_dev_channel_redirect_prefix, channel_display)
-    end
 
     # Core sending methods
-
     def upload_files
       file_uploads = files.map(&:to_h)
       response = client.files_upload_v2(
@@ -157,76 +77,6 @@ module SlackOutbox
         thread_ts:,
       )
       expose thread_ts: response["ts"]
-    end
-
-    # Implementation helpers - parsing inputs
-
-    def resolve_channel(raw)
-      return raw unless raw.is_a?(Symbol)
-
-      profile.channels[raw] || fail!("Unknown channel: #{raw}")
-    end
-
-    def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank?
-
-    # Implementation helpers - validating inputs
-
-    def blocks_valid?
-      return false if blocks.blank?
-
-      return true if blocks.all? do |single_block|
-        # TODO: Add better validations against slack block kit API
-        single_block.is_a?(Hash) && (single_block.key?(:type) || single_block.key?("type"))
-      end
-
-      false
-    end
-
-    # Implementation helpers - contextually-aware handling
-
-    def redirect_to_dev_channel? = dev_channel.present? && !SlackOutbox.config.in_production?
-    def channel_display = is_channel_id?(@resolved_channel) ? Slack::Messages::Formatting.channel_link(@resolved_channel) : "`<##{@resolved_channel}`"
-
-    # TODO: this is directionally correct, but more-correct would involve conversations.list
-    def is_channel_id?(given) = given[0] != "#" && given.match?(/\A[CGD][A-Z0-9]+\z/) # rubocop:disable Naming/PredicatePrefix
-
-    # TODO: just use memo once we update Axn
-    def channel_to_use = redirect_to_dev_channel? ? dev_channel : @resolved_channel
-
-    # TODO: just use memo once we update Axn
-    def text_to_use
-      return text unless redirect_to_dev_channel?
-
-      formatted_message = text&.lines&.map { |line| "> #{line}" }&.join
-
-      [
-        dev_channel_redirect_prefix,
-        formatted_message,
-      ].compact_blank.join("\n\n")
-    end
-
-    # Implementation helpers - sending errors
-
-    def send_error_notification(message)
-      message += "\n\n_Original message:_ \n> #{text.presence || "(blocks/attachments only)"}"
-
-      detail = if error_channel.blank?
-                 "NO ERROR CHANNEL CONFIGURED"
-               elsif @resolved_channel == error_channel
-                 "WHILE ATTEMPTING TO SEND TO CONFIGURED ERROR CHANNEL (#{error_channel})"
-               end
-
-      return warn("** SLACK MESSAGE SEND FAILED (#{detail}) **. Message: #{message}") if detail.present?
-
-      # Send directly, don't use call_async to avoid Sidekiq queue
-      self.class.call!(profile:, channel: error_channel, text: message)
-    rescue StandardError => e
-      # Last resort: notify error notifier if configured, otherwise Honeybadger if available
-      if SlackOutbox.config.error_notifier
-        SlackOutbox.config.error_notifier.call(e, context: { original_error_message: message })
-      elsif defined?(Honeybadger)
-        Honeybadger.notify(e, context: { original_error_message: message })
-      end
     end
   end
 end

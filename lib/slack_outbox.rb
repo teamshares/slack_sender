@@ -46,5 +46,6 @@ module SlackOutbox
 
     def deliver(**) = default_profile.deliver(**)
     def deliver!(**) = default_profile.deliver!(**)
+    def format_group_mention(key) = default_profile.format_group_mention(key)
   end
 end

@@ -17,7 +17,10 @@ module SlackOutbox
     def deliver(**kwargs) # rubocop:disable Naming/PredicateMethod
       # Validate async backend is configured and available
       unless SlackOutbox.config.async_backend_available?
-        raise Error, "No async backend configured. Use SlackOutbox.deliver! to execute inline, or configure an async backend (sidekiq or active_job) via SlackOutbox.config.async_backend to enable automatic retries for failed Slack sends."
+        raise Error,
+              "No async backend configured. Use SlackOutbox.deliver! to execute inline, " \
+              "or configure an async backend (sidekiq or active_job) via " \
+              "SlackOutbox.config.async_backend to enable automatic retries for failed Slack sends."
       end
 
       # Only relevant before we send to the backend -- avoid filling redis with large files
@@ -36,6 +39,18 @@ module SlackOutbox
 
     def deliver!(**)
       DeliveryAxn.call!(profile: self, **).thread_ts
+    end
+
+    def format_group_mention(key)
+      group_id = if key.is_a?(Symbol)
+                   user_groups[key] || raise("Unknown user group: #{key}")
+                 else
+                   key
+                 end
+
+      group_id = user_groups[:slack_development] unless SlackOutbox.config.in_production?
+
+      ::Slack::Messages::Formatting.group_link(group_id)
     end
   end
 end

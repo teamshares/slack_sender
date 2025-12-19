@@ -446,38 +446,6 @@ RSpec.describe SlackOutbox::DeliveryAxn do
     end
   end
 
-  describe ".format_group_mention" do
-    before do
-      allow(SlackOutbox.config).to receive(:in_production?).and_return(production?)
-    end
-
-    context "in production" do
-      let(:production?) { true }
-
-      it "returns formatted group link for string ID" do
-        result = action_class.format_group_mention(profile, "S123ABC")
-
-        expect(result).to eq("<!subteam^S123ABC>")
-      end
-    end
-
-    context "not in production" do
-      let(:production?) { false }
-
-      it "returns dev group link by default" do
-        result = action_class.format_group_mention(profile, "S123ABC")
-
-        expect(result).to eq("<!subteam^#{profile.user_groups[:slack_development]}>")
-      end
-
-      it "uses custom non_production fallback if provided" do
-        result = action_class.format_group_mention(profile, "S123ABC", "S_CUSTOM_DEV")
-
-        expect(result).to eq("<!subteam^S_CUSTOM_DEV>")
-      end
-    end
-  end
-
   describe "text_to_use" do
     subject(:result) { action_class.call(profile:, channel:, text: "Line 1\nLine 2\nLine 3") }
 

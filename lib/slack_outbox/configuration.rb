@@ -2,9 +2,9 @@
 
 module SlackOutbox
   class Configuration
-    SUPPORTED_ASYNC_BACKENDS = [:sidekiq, :active_job].freeze
+    SUPPORTED_ASYNC_BACKENDS = %i[sidekiq active_job].freeze
 
-    attr_writer :in_production, :async_backend
+    attr_writer :in_production
 
     def in_production?
       return @in_production unless @in_production.nil?
@@ -22,8 +22,12 @@ module SlackOutbox
 
     def async_backend=(value)
       if value && !SUPPORTED_ASYNC_BACKENDS.include?(value)
-        raise ArgumentError, "Unsupported async backend: #{value.inspect}. Supported backends: #{SUPPORTED_ASYNC_BACKENDS.inspect}. Please update SlackOutbox to support this backend."
+        raise ArgumentError,
+              "Unsupported async backend: #{value.inspect}. " \
+              "Supported backends: #{SUPPORTED_ASYNC_BACKENDS.inspect}. " \
+              "Please update SlackOutbox to support this backend."
       end
+
       @async_backend = value
     end
 
@@ -33,9 +37,9 @@ module SlackOutbox
 
       case backend
       when :sidekiq
-        defined?(Sidekiq) && defined?(Sidekiq::Job)
+        defined?(Sidekiq::Job)
       when :active_job
-        defined?(ActiveJob) && defined?(ActiveJob::Base)
+        defined?(ActiveJob::Base)
       else
         false
       end
@@ -44,8 +48,8 @@ module SlackOutbox
     private
 
     def detect_default_async_backend
-      return :sidekiq if defined?(Sidekiq) && defined?(Sidekiq::Job)
-      return :active_job if defined?(ActiveJob) && defined?(ActiveJob::Base)
+      return :sidekiq if defined?(Sidekiq::Job)
+      return :active_job if defined?(ActiveJob::Base)
 
       nil
     end
