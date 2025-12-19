@@ -35,6 +35,7 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "axn", "0.1.0-alpha.3"
+  # spec.add_dependency "axn", "0.1.0-alpha.4"
+  spec.add_dependency "axn"
   spec.add_dependency "slack-ruby-client"
 end
