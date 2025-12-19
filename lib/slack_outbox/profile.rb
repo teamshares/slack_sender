@@ -14,8 +14,16 @@ module SlackOutbox
       @dev_channel_redirect_prefix = dev_channel_redirect_prefix
     end
 
-    def deliver(**) # rubocop:disable Naming/PredicateMethod
-      DeliveryAxn.call_async(profile: self, **)
+    def deliver(**kwargs) # rubocop:disable Naming/PredicateMethod
+      if kwargs[:files].present?
+        multi_file_wrapper = MultiFileWrapper.new(kwargs[:files])
+        max_size = SlackOutbox.config.max_background_file_size
+        if max_size && multi_file_wrapper.total_file_size > max_size
+          raise SlackOutbox::Error,
+                "Total file size (#{multi_file_wrapper.total_file_size} bytes) exceeds configured limit (#{max_size} bytes) for background jobs"
+        end
+      end
+      DeliveryAxn.call_async(profile: self, **kwargs)
       true
     end
 

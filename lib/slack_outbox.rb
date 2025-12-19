@@ -19,6 +19,7 @@ require_relative "slack_outbox/profile"
 require_relative "slack_outbox/profile_registry"
 require_relative "slack_outbox/delivery_axn"
 require_relative "slack_outbox/file_wrapper"
+require_relative "slack_outbox/multi_file_wrapper"
 
 module SlackOutbox
   class << self
@@ -38,8 +39,15 @@ module SlackOutbox
       ProfileRegistry.default_profile = name
     end
 
-    def deliver(**) # rubocop:disable Naming/PredicateMethod
-      DeliveryAxn.call_async(profile: default_profile, **)
+    def deliver(**kwargs) # rubocop:disable Naming/PredicateMethod
+      if kwargs[:files].present?
+        multi_file_wrapper = MultiFileWrapper.new(kwargs[:files])
+        max_size = config.max_background_file_size
+        if max_size && multi_file_wrapper.total_file_size > max_size
+          raise Error, "Total file size (#{multi_file_wrapper.total_file_size} bytes) exceeds configured limit (#{max_size} bytes) for background jobs"
+        end
+      end
+      DeliveryAxn.call_async(profile: default_profile, **kwargs)
       true
     end
 
