@@ -145,7 +145,9 @@ RSpec.describe SlackOutbox do
                                  channels: {},
                                  user_groups: {})
 
-        expect(described_class.default_profile).to be_nil
+        expect do
+          described_class.default_profile
+        end.to raise_error(SlackOutbox::Error, /No default profile set/)
       end
 
       it "raises error if profile already registered" do

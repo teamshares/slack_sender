@@ -26,26 +26,8 @@ module SlackOutbox
         @profiles ||= {}
       end
 
-      def default_profile
-        return find(@default_profile_name) if @default_profile_name
-
-        @default_profile
-      end
-
-      def default_profile=(name)
-        @default_profile_name = name.to_sym
-      end
-
-      def register_default(config)
-        # For single-profile use cases - creates an anonymous default profile
-        @default_profile ||= Profile.new(**config)
-        @default_profile
-      end
-
       def clear!
         @profiles = {}
-        @default_profile_name = nil
-        @default_profile = nil
       end
     end
   end
