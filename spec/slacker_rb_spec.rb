@@ -168,7 +168,7 @@ RSpec.describe Slacker do
     end
   end
 
-  describe ".deliver" do
+  describe ".call" do
     context "when default profile is set" do
       let(:profile) do
         described_class.register(
@@ -183,27 +183,27 @@ RSpec.describe Slacker do
         profile
       end
 
-      it "delegates to default_profile.deliver" do
-        expect(described_class.default_profile).to receive(:deliver).with(channel: "C123", text: "test")
-        described_class.deliver(channel: "C123", text: "test")
+      it "delegates to default_profile.call" do
+        expect(described_class.default_profile).to receive(:call).with(channel: "C123", text: "test")
+        described_class.call(channel: "C123", text: "test")
       end
 
-      it "returns the result from profile.deliver" do
-        allow(described_class.default_profile).to receive(:deliver).and_return(true)
-        expect(described_class.deliver(channel: "C123", text: "test")).to be true
+      it "returns the result from profile.call" do
+        allow(described_class.default_profile).to receive(:call).and_return(true)
+        expect(described_class.call(channel: "C123", text: "test")).to be true
       end
     end
 
     context "when default profile is not set" do
       it "raises an error" do
         expect do
-          described_class.deliver(channel: "C123", text: "test")
+          described_class.call(channel: "C123", text: "test")
         end.to raise_error(Slacker::Error, /No default profile set/)
       end
     end
   end
 
-  describe ".deliver!" do
+  describe ".call!" do
     context "when default profile is set" do
       let(:profile) do
         described_class.register(
@@ -218,16 +218,16 @@ RSpec.describe Slacker do
         profile
       end
 
-      it "delegates to default_profile.deliver!" do
-        expect(described_class.default_profile).to receive(:deliver!).with(channel: "C123", text: "test").and_return("123.456")
-        expect(described_class.deliver!(channel: "C123", text: "test")).to eq("123.456")
+      it "delegates to default_profile.call!" do
+        expect(described_class.default_profile).to receive(:call!).with(channel: "C123", text: "test").and_return("123.456")
+        expect(described_class.call!(channel: "C123", text: "test")).to eq("123.456")
       end
     end
 
     context "when default profile is not set" do
       it "raises an error" do
         expect do
-          described_class.deliver!(channel: "C123", text: "test")
+          described_class.call!(channel: "C123", text: "test")
         end.to raise_error(Slacker::Error, /No default profile set/)
       end
     end

@@ -44,8 +44,8 @@ module Slacker
       raise Error, "No default profile set. Call Slacker.register(...) first"
     end
 
-    def deliver(**) = default_profile.deliver(**)
-    def deliver!(**) = default_profile.deliver!(**)
+    def call(**) = default_profile.call(**)
+    def call!(**) = default_profile.call!(**)
     def format_group_mention(key) = default_profile.format_group_mention(key)
   end
 end

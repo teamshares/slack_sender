@@ -14,11 +14,11 @@ module Slacker
       @dev_channel_redirect_prefix = dev_channel_redirect_prefix
     end
 
-    def deliver(**kwargs) # rubocop:disable Naming/PredicateMethod
+    def call(**kwargs) # rubocop:disable Naming/PredicateMethod
       # Validate async backend is configured and available
       unless Slacker.config.async_backend_available?
         raise Error,
-              "No async backend configured. Use Slacker.deliver! to execute inline, " \
+              "No async backend configured. Use Slacker.call! to execute inline, " \
               "or configure an async backend (sidekiq or active_job) via " \
               "Slacker.config.async_backend to enable automatic retries for failed Slack sends."
       end
@@ -40,7 +40,7 @@ module Slacker
       true
     end
 
-    def deliver!(**)
+    def call!(**)
       DeliveryAxn.call!(profile: self, **).thread_ts
     end
 

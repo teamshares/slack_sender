@@ -113,7 +113,7 @@ RSpec.describe Slacker::Profile do
     end
   end
 
-  describe "#deliver" do
+  describe "#call" do
     before do
       # Set the registered_name on the profile instance
       profile.instance_variable_set(:@registered_name, :test_profile)
@@ -122,12 +122,12 @@ RSpec.describe Slacker::Profile do
 
     it "calls DeliveryAxn.call_async with profile name" do
       expect(Slacker::DeliveryAxn).to receive(:call_async).with(profile: "test_profile", channel: "C123", text: "test")
-      profile.deliver(channel: "C123", text: "test")
+      profile.call(channel: "C123", text: "test")
     end
 
     it "returns true" do
       allow(Slacker::DeliveryAxn).to receive(:call_async)
-      expect(profile.deliver(channel: "C123", text: "test")).to be true
+      expect(profile.call(channel: "C123", text: "test")).to be true
     end
 
     context "when profile is not registered" do
@@ -136,7 +136,7 @@ RSpec.describe Slacker::Profile do
       end
 
       it "raises an error" do
-        expect { profile.deliver(channel: "C123", text: "test") }.to raise_error(
+        expect { profile.call(channel: "C123", text: "test") }.to raise_error(
           Slacker::Error,
           "Profile must be registered before using async delivery. Register it with Slacker.register(name, config)",
         )
@@ -144,12 +144,12 @@ RSpec.describe Slacker::Profile do
     end
   end
 
-  describe "#deliver!" do
+  describe "#call!" do
     let(:result) { instance_double("Result", thread_ts: "123.456") }
 
     it "calls DeliveryAxn.call! with profile" do
       expect(Slacker::DeliveryAxn).to receive(:call!).with(profile:, channel: "C123", text: "test").and_return(result)
-      expect(profile.deliver!(channel: "C123", text: "test")).to eq("123.456")
+      expect(profile.call!(channel: "C123", text: "test")).to eq("123.456")
     end
   end
 

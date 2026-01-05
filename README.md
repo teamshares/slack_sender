@@ -55,13 +55,13 @@ Slacker.register(
 
 ```ruby
 # Async delivery (recommended) - uses Sidekiq or ActiveJob
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   text: "Server is running low on memory"
 )
 
 # Synchronous delivery (returns thread timestamp)
-thread_ts = Slacker.deliver!(
+thread_ts = Slacker.call!(
   channel: :alerts,
   text: "Deployment completed successfully"
 )
@@ -109,7 +109,7 @@ Slacker.register(:support,
 )
 
 # Use specific profile
-Slacker.profile(:support).deliver(
+Slacker.profile(:support).call(
   channel: :tickets,
   text: "New ticket received"
 )
@@ -131,13 +131,13 @@ Slacker.profile(:support).deliver(
 
 ```ruby
 # Simple text message
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   text: "Hello, World!"
 )
 
 # With markdown formatting
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   text: "User *#{user.name}* just signed up"
 )
@@ -149,17 +149,17 @@ Channels can be specified as symbols (resolved from profile config) or channel I
 
 ```ruby
 # Using symbol (resolved from channels hash)
-Slacker.deliver(channel: :alerts, text: "Alert")
+Slacker.call(channel: :alerts, text: "Alert")
 
 # Using channel ID directly
-Slacker.deliver(channel: "C1234567890", text: "Alert")
+Slacker.call(channel: "C1234567890", text: "Alert")
 ```
 
 ### Rich Messages
 
 ```ruby
 # With blocks
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   blocks: [
     {
@@ -173,7 +173,7 @@ Slacker.deliver(
 )
 
 # With attachments
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   attachments: [
     {
@@ -184,7 +184,7 @@ Slacker.deliver(
 )
 
 # With custom emoji
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   text: "Robot says hello",
   icon_emoji: "robot"
@@ -195,14 +195,14 @@ Slacker.deliver(
 
 ```ruby
 # Single file
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   text: "Here's the report",
   files: [File.open("report.pdf")]
 )
 
 # Multiple files
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   text: "Multiple files attached",
   files: [
@@ -212,7 +212,7 @@ Slacker.deliver(
 )
 
 # File with metadata
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   files: [{
     file: File.open("report.pdf"),
@@ -226,14 +226,14 @@ Slacker.deliver(
 
 ```ruby
 # Reply to a thread
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   text: "This is a reply",
   thread_ts: "1234567890.123456"
 )
 
 # Get thread timestamp from initial message
-thread_ts = Slacker.deliver!(
+thread_ts = Slacker.call!(
   channel: :alerts,
   text: "Initial message"
 )
@@ -273,7 +273,7 @@ Slacker.register(
 )
 
 # In development, this goes to dev_channel with a prefix
-Slacker.deliver(
+Slacker.call(
   channel: :production_alerts,
   text: "Critical alert"
 )
@@ -309,7 +309,7 @@ If Sidekiq is available, it's automatically used:
 
 ```ruby
 # No configuration needed - auto-detected
-Slacker.deliver(channel: :alerts, text: "Message")
+Slacker.call(channel: :alerts, text: "Message")
 ```
 
 ### ActiveJob
@@ -328,7 +328,7 @@ For synchronous delivery (no background job):
 
 ```ruby
 # Returns thread timestamp immediately
-thread_ts = Slacker.deliver!(
+thread_ts = Slacker.call!(
   channel: :alerts,
   text: "Message"
 )
@@ -357,7 +357,7 @@ Slacker.configure do |config|
 end
 
 # This will raise an error if total file size exceeds limit
-Slacker.deliver(
+Slacker.call(
   channel: :alerts,
   files: [large_file]  # Raises if > 10MB
 )
@@ -368,7 +368,7 @@ Slacker.deliver(
 ### Deployment Notifications
 
 ```ruby
-Slacker.deliver(
+Slacker.call(
   channel: :deployments,
   text: "Deployment to #{Rails.env} completed",
   blocks: [
@@ -386,7 +386,7 @@ Slacker.deliver(
 ### Error Alerts
 
 ```ruby
-Slacker.deliver(
+Slacker.call(
   channel: :errors,
   text: "Error in payment processing",
   attachments: [
@@ -406,7 +406,7 @@ Slacker.deliver(
 ```ruby
 # Generate and send report
 report = generate_daily_report
-Slacker.deliver(
+Slacker.call(
   channel: :reports,
   text: "Daily Report - #{Date.today}",
   files: [report.to_file]
