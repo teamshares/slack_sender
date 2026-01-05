@@ -14,7 +14,7 @@ module Slacker
       @dev_channel_redirect_prefix = dev_channel_redirect_prefix
     end
 
-    def call(**kwargs) # rubocop:disable Naming/PredicateMethod
+    def call(**kwargs)
       # Validate async backend is configured and available
       unless Slacker.config.async_backend_available?
         raise Error,
