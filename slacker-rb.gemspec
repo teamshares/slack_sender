@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "lib/slacker_rb/version"
+require_relative "lib/slacker/version"
 
 Gem::Specification.new do |spec|
   spec.name = "slacker-rb"
