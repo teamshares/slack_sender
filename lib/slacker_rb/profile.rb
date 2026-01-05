@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module SlackOutbox
+module Slacker
   class Profile
     attr_reader :dev_channel, :error_channel, :channels, :user_groups, :slack_client_config, :dev_channel_redirect_prefix
 
@@ -16,17 +16,17 @@ module SlackOutbox
 
     def deliver(**kwargs) # rubocop:disable Naming/PredicateMethod
       # Validate async backend is configured and available
-      unless SlackOutbox.config.async_backend_available?
+      unless Slacker.config.async_backend_available?
         raise Error,
-              "No async backend configured. Use SlackOutbox.deliver! to execute inline, " \
+              "No async backend configured. Use Slacker.deliver! to execute inline, " \
               "or configure an async backend (sidekiq or active_job) via " \
-              "SlackOutbox.config.async_backend to enable automatic retries for failed Slack sends."
+              "Slacker.config.async_backend to enable automatic retries for failed Slack sends."
       end
 
       # Only relevant before we send to the backend -- avoid filling redis with large files
       if kwargs[:files].present?
         total_file_size = MultiFileWrapper.new(kwargs[:files]).total_file_size
-        max_size = SlackOutbox.config.max_background_file_size
+        max_size = Slacker.config.max_background_file_size
 
         if max_size && total_file_size > max_size
           raise Error, "Total file size (#{total_file_size} bytes) exceeds configured limit (#{max_size} bytes) for background jobs"
@@ -34,7 +34,7 @@ module SlackOutbox
       end
 
       registered_name = instance_variable_get(:@registered_name)
-      raise Error, "Profile must be registered before using async delivery. Register it with SlackOutbox.register(name, config)" unless registered_name
+      raise Error, "Profile must be registered before using async delivery. Register it with Slacker.register(name, config)" unless registered_name
 
       DeliveryAxn.call_async(profile: registered_name.to_s, **kwargs)
       true
@@ -51,7 +51,7 @@ module SlackOutbox
                    key
                  end
 
-      group_id = user_groups[:slack_development] unless SlackOutbox.config.in_production?
+      group_id = user_groups[:slack_development] unless Slacker.config.in_production?
 
       ::Slack::Messages::Formatting.group_link(group_id)
     end

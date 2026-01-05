@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-RSpec.describe SlackOutbox::DeliveryAxn do
+RSpec.describe Slacker::DeliveryAxn do
   let(:profile) do
-    SlackOutbox::Profile.new(
+    Slacker::Profile.new(
       token: "SLACK_API_TOKEN",
       dev_channel: "C01H3KU3B9P",
       error_channel: "C03F1DMJ4PM",
@@ -15,7 +15,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
       },
     )
   end
-  let(:action_class) { SlackOutbox::DeliveryAxn }
+  let(:action_class) { Slacker::DeliveryAxn }
   let(:channel) { "C01H3KU3B9P" }
   let(:text) { "Hello, World!" }
   let(:client_dbl) { instance_double(Slack::Web::Client) }
@@ -30,7 +30,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
   describe "expects" do
     describe "channel preprocessing" do
       before do
-        allow(SlackOutbox.config).to receive(:in_production?).and_return(true)
+        allow(Slacker.config).to receive(:in_production?).and_return(true)
       end
 
       context "with symbol channel key" do
@@ -69,7 +69,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
 
     describe "text preprocessing" do
       before do
-        allow(SlackOutbox.config).to receive(:in_production?).and_return(true)
+        allow(Slacker.config).to receive(:in_production?).and_return(true)
       end
 
       context "with markdown text" do
@@ -95,7 +95,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
       subject(:result) { action_class.call(profile:, channel:, text:, icon_emoji:) }
 
       before do
-        allow(SlackOutbox.config).to receive(:in_production?).and_return(true)
+        allow(Slacker.config).to receive(:in_production?).and_return(true)
       end
 
       context "with emoji without colons" do
@@ -222,7 +222,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
         subject(:result) { action_class.call(profile:, channel:, files:, text:) }
 
         before do
-          allow(SlackOutbox.config).to receive(:in_production?).and_return(true)
+          allow(Slacker.config).to receive(:in_production?).and_return(true)
         end
 
         it "succeeds" do
@@ -242,7 +242,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
       let(:thread_ts) { nil }
 
       before do
-        allow(SlackOutbox.config).to receive(:in_production?).and_return(production?)
+        allow(Slacker.config).to receive(:in_production?).and_return(production?)
       end
 
       context "in production" do
@@ -277,7 +277,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
 
         context "with custom dev_channel_redirect_prefix" do
           let(:profile) do
-            SlackOutbox::Profile.new(
+            Slacker::Profile.new(
               token: "SLACK_API_TOKEN",
               dev_channel: "C01H3KU3B9P",
               error_channel: "C03F1DMJ4PM",
@@ -315,7 +315,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
       before do
         file.write("file content")
         file.rewind
-        allow(SlackOutbox.config).to receive(:in_production?).and_return(true)
+        allow(Slacker.config).to receive(:in_production?).and_return(true)
         allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "f_123" }] })
         allow(client_dbl).to receive(:files_info).and_return({
                                                                "file" => { "shares" => { "public" => { channel => [{ "ts" => "123.456" }] } } },
@@ -356,7 +356,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
 
     describe "error handling" do
       before do
-        allow(SlackOutbox.config).to receive(:in_production?).and_return(true)
+        allow(Slacker.config).to receive(:in_production?).and_return(true)
       end
 
       context "when NotInChannel error occurs" do
@@ -412,7 +412,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
 
       context "when error_channel is nil" do
         let(:profile_without_error_channel) do
-          SlackOutbox::Profile.new(
+          Slacker::Profile.new(
             token: "SLACK_API_TOKEN",
             dev_channel: "C01H3KU3B9P",
             error_channel: nil,
@@ -441,7 +441,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
     subject(:result) { action_class.call(profile:, channel:, text: "Line 1\nLine 2\nLine 3") }
 
     before do
-      allow(SlackOutbox.config).to receive(:in_production?).and_return(false)
+      allow(Slacker.config).to receive(:in_production?).and_return(false)
     end
 
     it "wraps each line with quote formatting" do
@@ -470,7 +470,7 @@ RSpec.describe SlackOutbox::DeliveryAxn do
 
     context "with custom dev_channel_redirect_prefix" do
       let(:profile) do
-        SlackOutbox::Profile.new(
+        Slacker::Profile.new(
           token: "SLACK_API_TOKEN",
           dev_channel: "C01H3KU3B9P",
           error_channel: "C03F1DMJ4PM",

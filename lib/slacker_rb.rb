@@ -14,21 +14,21 @@ rescue LoadError
   # ActiveJob is optional for runtime, only needed for async operations
 end
 require "axn"
-require_relative "slack_outbox/version"
-require_relative "slack_outbox/configuration"
-require_relative "slack_outbox/util"
+require_relative "slacker_rb/version"
+require_relative "slacker_rb/configuration"
+require_relative "slacker_rb/util"
 
-module SlackOutbox
+module Slacker
   class Error < StandardError; end
 end
 
-require_relative "slack_outbox/profile"
-require_relative "slack_outbox/profile_registry"
-require_relative "slack_outbox/delivery_axn"
-require_relative "slack_outbox/file_wrapper"
-require_relative "slack_outbox/multi_file_wrapper"
+require_relative "slacker_rb/profile"
+require_relative "slacker_rb/profile_registry"
+require_relative "slacker_rb/delivery_axn"
+require_relative "slacker_rb/file_wrapper"
+require_relative "slacker_rb/multi_file_wrapper"
 
-module SlackOutbox
+module Slacker
   class << self
     def register(name = nil, **config)
       ProfileRegistry.register(name.presence || :default, config)
@@ -38,14 +38,10 @@ module SlackOutbox
       ProfileRegistry.find(name)
     end
 
-    def [](name)
-      ProfileRegistry.find(name)
-    end
-
     def default_profile
       ProfileRegistry.find(:default)
     rescue ProfileNotFound
-      raise Error, "No default profile set. Call SlackOutbox.register(...) first"
+      raise Error, "No default profile set. Call Slacker.register(...) first"
     end
 
     def deliver(**) = default_profile.deliver(**)

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module SlackOutbox
+module Slacker
   class DeliveryAxn
     module ExceptionHandlers
       def self.included(base)
@@ -41,8 +41,8 @@ module SlackOutbox
         self.class.call!(profile:, channel: error_channel, text: message)
       rescue StandardError => e
         # Last resort: notify error notifier if configured, otherwise Honeybadger if available
-        if SlackOutbox.config.error_notifier
-          SlackOutbox.config.error_notifier.call(e, context: { original_error_message: message })
+        if Slacker.config.error_notifier
+          Slacker.config.error_notifier.call(e, context: { original_error_message: message })
         elsif defined?(Honeybadger)
           Honeybadger.notify(e, context: { original_error_message: message })
         else

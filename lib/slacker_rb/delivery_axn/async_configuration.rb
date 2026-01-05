@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module SlackOutbox
+module Slacker
   class DeliveryAxn
     module AsyncConfiguration
       def self.extended(base)
@@ -8,16 +8,16 @@ module SlackOutbox
       end
 
       def _configure_async_backend
-        backend = SlackOutbox.config.async_backend
+        backend = Slacker.config.async_backend
 
         # No backend configured - will raise error when deliver is called
         return unless backend
 
-        unless SlackOutbox::Configuration::SUPPORTED_ASYNC_BACKENDS.include?(backend)
+        unless Slacker::Configuration::SUPPORTED_ASYNC_BACKENDS.include?(backend)
           raise ArgumentError,
                 "Unsupported async backend: #{backend.inspect}. " \
-                "Supported backends: #{SlackOutbox::Configuration::SUPPORTED_ASYNC_BACKENDS.inspect}. " \
-                "Please update SlackOutbox to support this backend."
+                "Supported backends: #{Slacker::Configuration::SUPPORTED_ASYNC_BACKENDS.inspect}. " \
+                "Please update Slacker to support this backend."
         end
 
         case backend
@@ -26,13 +26,13 @@ module SlackOutbox
           # Configure Sidekiq-specific retry logic
           if defined?(Sidekiq::Job) && respond_to?(:sidekiq_retry_in)
             sidekiq_retry_in do |_count, exception|
-              SlackOutbox::Util.parse_retry_delay_from_slack_exception(exception)
+              Slacker::Util.parse_retry_delay_from_slack_exception(exception)
             end
           end
         when :active_job
           async :active_job do
             retry_on StandardError, wait: :exponentially_longer, attempts: 5 do |_job, exception|
-              retry_behavior = SlackOutbox::Util.parse_retry_delay_from_slack_exception(exception)
+              retry_behavior = Slacker::Util.parse_retry_delay_from_slack_exception(exception)
               next if retry_behavior == :discard
 
               # If retry_behavior is a number (seconds), schedule retry with that delay

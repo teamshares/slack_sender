@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module SlackOutbox
+module Slacker
   class DeliveryAxn
     module Validation
       def self.included(base)

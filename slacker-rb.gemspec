@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-require_relative "lib/slack_outbox/version"
+require_relative "lib/slacker_rb/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "slack_outbox"
-  spec.version = SlackOutbox::VERSION
+  spec.name = "slacker-rb"
+  spec.version = Slacker::VERSION
   spec.authors = ["Kali Donovan"]
   spec.email = ["kali@teamshares.com"]
 
-  spec.summary = "Slack notification outbox using Axn actions"
-  spec.description = "Slack notification functionality with support for multiple workspaces and channels"
-  spec.homepage = "https://github.com/teamshares/slack_outbox"
+  spec.summary = "Slack messages for people who don’t want to babysit Slack."
+  spec.description = "Slack messaging with background dispatch with automatic rate-limit retries."
+  spec.homepage = "https://github.com/teamshares/slacker-rb"
   spec.license = "MIT"
 
   # NOTE: uses endless methods from 3, literal value omission from 3.1, and Axn which requires 3.2.1+
@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
-  spec.metadata["changelog_uri"] = "https://github.com/teamshares/slack_outbox/blob/main/CHANGELOG.md"
+  spec.metadata["changelog_uri"] = "https://github.com/teamshares/slacker-rb/blob/main/CHANGELOG.md"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   # Specify which files should be added to the gem when it is released.

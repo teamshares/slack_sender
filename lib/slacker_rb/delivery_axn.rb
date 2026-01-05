@@ -5,7 +5,7 @@ require_relative "delivery_axn/exception_handlers"
 require_relative "delivery_axn/validation"
 require_relative "delivery_axn/channel_resolution"
 
-module SlackOutbox
+module Slacker
   class DeliveryAxn
     include Axn
 
@@ -33,7 +33,7 @@ module SlackOutbox
     expects :attachments, type: Array, optional: true
     expects :thread_ts, type: String, optional: true
     expects :files, type: Array, optional: true, preprocess: lambda { |raw|
-      Array(raw).presence&.each_with_index&.map { |f, i| SlackOutbox::FileWrapper.wrap(f, i) }
+      Array(raw).presence&.each_with_index&.map { |f, i| Slacker::FileWrapper.wrap(f, i) }
     }
 
     exposes :thread_ts, type: String

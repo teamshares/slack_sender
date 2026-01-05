@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    slack_outbox (0.1.0)
+    slacker-rb (0.1.0)
       axn (= 0.1.0.pre.alpha.3)
       slack-ruby-client
 
@@ -151,7 +151,7 @@ DEPENDENCIES
   rspec (~> 3.0)
   rubocop (~> 1.21)
   sidekiq
-  slack_outbox!
+  slacker-rb!
 
 BUNDLED WITH
    2.6.8

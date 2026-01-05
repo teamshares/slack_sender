@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-# Specify your gem's dependencies in slack_outbox.gemspec
+# Specify your gem's dependencies in slacker-rb.gemspec
 gemspec
 
 # Development dependencies

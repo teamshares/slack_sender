@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe SlackOutbox::ProfileRegistry do
+RSpec.describe Slacker::ProfileRegistry do
   after do
     described_class.clear!
   end
@@ -13,7 +13,7 @@ RSpec.describe SlackOutbox::ProfileRegistry do
                                          channels: {},
                                          user_groups: {})
 
-      expect(profile).to be_a(SlackOutbox::Profile)
+      expect(profile).to be_a(Slacker::Profile)
       expect(described_class.find(:test_profile)).to eq(profile)
     end
 
@@ -39,7 +39,7 @@ RSpec.describe SlackOutbox::ProfileRegistry do
                                  dev_channel: "C456",
                                  channels: {},
                                  user_groups: {})
-      end.to raise_error(SlackOutbox::DuplicateProfileError, /already registered/)
+      end.to raise_error(Slacker::DuplicateProfileError, /already registered/)
     end
   end
 
@@ -54,26 +54,26 @@ RSpec.describe SlackOutbox::ProfileRegistry do
 
     it "finds a registered profile" do
       profile = described_class.find(:test_profile)
-      expect(profile).to be_a(SlackOutbox::Profile)
+      expect(profile).to be_a(Slacker::Profile)
       expect(profile.dev_channel).to eq("C123")
     end
 
     it "raises error if profile not found" do
       expect do
         described_class.find(:nonexistent)
-      end.to raise_error(SlackOutbox::ProfileNotFound, /not found/)
+      end.to raise_error(Slacker::ProfileNotFound, /not found/)
     end
 
     it "raises error if name is nil" do
       expect do
         described_class.find(nil)
-      end.to raise_error(SlackOutbox::ProfileNotFound, /cannot be nil/)
+      end.to raise_error(Slacker::ProfileNotFound, /cannot be nil/)
     end
 
     it "raises error if name is empty" do
       expect do
         described_class.find("")
-      end.to raise_error(SlackOutbox::ProfileNotFound, /cannot be empty/)
+      end.to raise_error(Slacker::ProfileNotFound, /cannot be empty/)
     end
   end
 

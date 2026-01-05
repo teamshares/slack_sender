@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-RSpec.describe SlackOutbox do
+RSpec.describe Slacker do
   after do
-    SlackOutbox::ProfileRegistry.clear!
+    Slacker::ProfileRegistry.clear!
   end
 
   describe ".register" do
@@ -15,7 +15,7 @@ RSpec.describe SlackOutbox do
           user_groups: {},
         )
 
-        expect(profile).to be_a(SlackOutbox::Profile)
+        expect(profile).to be_a(Slacker::Profile)
         expect(profile.dev_channel).to eq("C123")
         expect(described_class.profile(:default)).to eq(profile)
         expect(described_class.default_profile).to eq(profile)
@@ -36,7 +36,7 @@ RSpec.describe SlackOutbox do
             channels: {},
             user_groups: {},
           )
-        end.to raise_error(SlackOutbox::DuplicateProfileError, /already registered/)
+        end.to raise_error(Slacker::DuplicateProfileError, /already registered/)
       end
 
       it "raises error if :default already registered via explicit :default call" do
@@ -53,7 +53,7 @@ RSpec.describe SlackOutbox do
             channels: {},
             user_groups: {},
           )
-        end.to raise_error(SlackOutbox::DuplicateProfileError, /already registered/)
+        end.to raise_error(Slacker::DuplicateProfileError, /already registered/)
       end
     end
 
@@ -65,7 +65,7 @@ RSpec.describe SlackOutbox do
                                            channels: {},
                                            user_groups: {})
 
-        expect(profile).to be_a(SlackOutbox::Profile)
+        expect(profile).to be_a(Slacker::Profile)
         expect(profile.dev_channel).to eq("C123")
         expect(described_class.profile(:default)).to eq(profile)
         expect(described_class.default_profile).to eq(profile)
@@ -84,7 +84,7 @@ RSpec.describe SlackOutbox do
                                    dev_channel: "C456",
                                    channels: {},
                                    user_groups: {})
-        end.to raise_error(SlackOutbox::DuplicateProfileError, /already registered/)
+        end.to raise_error(Slacker::DuplicateProfileError, /already registered/)
       end
 
       it "raises error if :default already registered via no-arg call" do
@@ -101,7 +101,7 @@ RSpec.describe SlackOutbox do
                                    dev_channel: "C456",
                                    channels: {},
                                    user_groups: {})
-        end.to raise_error(SlackOutbox::DuplicateProfileError, /already registered/)
+        end.to raise_error(Slacker::DuplicateProfileError, /already registered/)
       end
 
       it "behaves identically to calling with no positional argument" do
@@ -112,7 +112,7 @@ RSpec.describe SlackOutbox do
           user_groups: {},
         )
 
-        SlackOutbox::ProfileRegistry.clear!
+        Slacker::ProfileRegistry.clear!
 
         profile2 = described_class.register(:default,
                                             token: "TEST_TOKEN",
@@ -133,7 +133,7 @@ RSpec.describe SlackOutbox do
                                            channels: {},
                                            user_groups: {})
 
-        expect(profile).to be_a(SlackOutbox::Profile)
+        expect(profile).to be_a(Slacker::Profile)
         expect(profile.dev_channel).to eq("C123")
         expect(described_class.profile(:production)).to eq(profile)
       end
@@ -147,7 +147,7 @@ RSpec.describe SlackOutbox do
 
         expect do
           described_class.default_profile
-        end.to raise_error(SlackOutbox::Error, /No default profile set/)
+        end.to raise_error(Slacker::Error, /No default profile set/)
       end
 
       it "raises error if profile already registered" do
@@ -163,7 +163,7 @@ RSpec.describe SlackOutbox do
                                    dev_channel: "C456",
                                    channels: {},
                                    user_groups: {})
-        end.to raise_error(SlackOutbox::DuplicateProfileError, /already registered/)
+        end.to raise_error(Slacker::DuplicateProfileError, /already registered/)
       end
     end
   end
@@ -198,7 +198,7 @@ RSpec.describe SlackOutbox do
       it "raises an error" do
         expect do
           described_class.deliver(channel: "C123", text: "test")
-        end.to raise_error(SlackOutbox::Error, /No default profile set/)
+        end.to raise_error(Slacker::Error, /No default profile set/)
       end
     end
   end
@@ -228,7 +228,7 @@ RSpec.describe SlackOutbox do
       it "raises an error" do
         expect do
           described_class.deliver!(channel: "C123", text: "test")
-        end.to raise_error(SlackOutbox::Error, /No default profile set/)
+        end.to raise_error(Slacker::Error, /No default profile set/)
       end
     end
   end

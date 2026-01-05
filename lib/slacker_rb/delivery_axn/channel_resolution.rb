@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module SlackOutbox
+module Slacker
   class DeliveryAxn
     module ChannelResolution
       protected
@@ -22,7 +22,7 @@ module SlackOutbox
 
       private
 
-      def redirect_to_dev_channel? = dev_channel.present? && !SlackOutbox.config.in_production?
+      def redirect_to_dev_channel? = dev_channel.present? && !Slacker.config.in_production?
 
       def channel_display = is_channel_id?(@resolved_channel) ? Slack::Messages::Formatting.channel_link(@resolved_channel) : "`<##{@resolved_channel}`"
 
