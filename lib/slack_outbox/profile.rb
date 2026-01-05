@@ -33,7 +33,10 @@ module SlackOutbox
         end
       end
 
-      DeliveryAxn.call_async(profile: self, **kwargs)
+      registered_name = instance_variable_get(:@registered_name)
+      raise Error, "Profile must be registered before using async delivery. Register it with SlackOutbox.register(name, config)" unless registered_name
+
+      DeliveryAxn.call_async(profile: registered_name, **kwargs)
       true
     end
 

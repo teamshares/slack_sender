@@ -114,14 +114,33 @@ RSpec.describe SlackOutbox::Profile do
   end
 
   describe "#deliver" do
-    it "calls DeliveryAxn.call_async with profile" do
-      expect(SlackOutbox::DeliveryAxn).to receive(:call_async).with(profile:, channel: "C123", text: "test")
+    before do
+      # Set the registered_name on the profile instance
+      profile.instance_variable_set(:@registered_name, :test_profile)
+      allow(SlackOutbox.config).to receive(:async_backend_available?).and_return(true)
+    end
+
+    it "calls DeliveryAxn.call_async with profile name" do
+      expect(SlackOutbox::DeliveryAxn).to receive(:call_async).with(profile: :test_profile, channel: "C123", text: "test")
       profile.deliver(channel: "C123", text: "test")
     end
 
     it "returns true" do
       allow(SlackOutbox::DeliveryAxn).to receive(:call_async)
       expect(profile.deliver(channel: "C123", text: "test")).to be true
+    end
+
+    context "when profile is not registered" do
+      before do
+        profile.remove_instance_variable(:@registered_name) if profile.instance_variable_defined?(:@registered_name)
+      end
+
+      it "raises an error" do
+        expect { profile.deliver(channel: "C123", text: "test") }.to raise_error(
+          SlackOutbox::Error,
+          "Profile must be registered before using async delivery. Register it with SlackOutbox.register(name, config)"
+        )
+      end
     end
   end
 

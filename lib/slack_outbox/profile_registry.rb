@@ -11,6 +11,8 @@ module SlackOutbox
         raise DuplicateProfileError, "Profile #{name} already registered" if all.key?(key)
 
         profile = Profile.new(**config)
+        # Store the name on the profile instance for easy lookup
+        profile.instance_variable_set(:@registered_name, key)
         all[key] = profile
         profile
       end

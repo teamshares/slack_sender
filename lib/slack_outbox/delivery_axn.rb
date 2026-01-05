@@ -17,7 +17,11 @@ module SlackOutbox
     include Validation
     include ChannelResolution
 
-    expects :profile, type: Profile
+    expects :profile, type: Profile, preprocess: lambda { |p|
+      # If given a string/symbol (profile name), look it up in the registry
+      # Otherwise, assume it's already a Profile object
+      p.is_a?(Profile) ? p : ProfileRegistry.find(p)
+    }
     expects :channel # Symbol or String - resolved in before block
     expects :text, type: String, optional: true, preprocess: lambda { |txt|
       ::Slack::Messages::Formatting.markdown(txt) if txt.present?
