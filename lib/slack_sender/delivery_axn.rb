@@ -36,10 +36,14 @@ module SlackSender
       Array(raw).presence&.each_with_index&.map { |f, i| SlackSender::FileWrapper.wrap(f, i) }
     }
 
-    exposes :thread_ts, type: String
+    exposes :thread_ts, type: String, optional: true
 
     def call
       files.present? ? upload_files : post_message
+    rescue Slack::Web::Api::Errors::IsArchived => e
+      raise(e) unless SlackSender.config.ignore_archived_errors
+
+      done! "Failed successfully: ignoring 'is archived' error per config"
     end
 
     private

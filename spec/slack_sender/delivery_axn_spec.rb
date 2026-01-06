@@ -352,6 +352,35 @@ RSpec.describe SlackSender::DeliveryAxn do
           expect(result.thread_ts).to eq("private.ts")
         end
       end
+
+      context "when IsArchived error occurs during file upload" do
+        before do
+          allow(client_dbl).to receive(:files_upload_v2).and_raise(
+            Slack::Web::Api::Errors::IsArchived.new("is_archived"),
+          )
+        end
+
+        context "when config.ignore_archived_errors is false" do
+          before do
+            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(false)
+          end
+
+          it "fails with the error" do
+            expect(result).not_to be_ok
+          end
+        end
+
+        context "when config.ignore_archived_errors is true" do
+          before do
+            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(true)
+          end
+
+          it "succeeds with done message" do
+            expect(result).to be_ok
+            expect(result.message).to eq("Failed successfully: ignoring 'is archived' error per config")
+          end
+        end
+      end
     end
 
     describe "error handling" do
@@ -432,6 +461,47 @@ RSpec.describe SlackSender::DeliveryAxn do
           expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED/)
 
           expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
+        end
+      end
+
+      context "when IsArchived error occurs" do
+        subject(:result) { action_class.call(profile:, channel:, text:) }
+
+        before do
+          allow(client_dbl).to receive(:chat_postMessage).and_raise(
+            Slack::Web::Api::Errors::IsArchived.new("is_archived"),
+          )
+        end
+
+        context "when config.ignore_archived_errors is false" do
+          before do
+            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(false)
+          end
+
+          it "fails with the error" do
+            expect(result).not_to be_ok
+          end
+        end
+
+        context "when config.ignore_archived_errors is true" do
+          before do
+            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(true)
+          end
+
+          it "succeeds with done message" do
+            expect(result).to be_ok
+            expect(result.message).to eq("Failed successfully: ignoring 'is archived' error per config")
+          end
+        end
+
+        context "when config.ignore_archived_errors is nil" do
+          before do
+            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(nil)
+          end
+
+          it "fails with the error" do
+            expect(result).not_to be_ok
+          end
         end
       end
     end
