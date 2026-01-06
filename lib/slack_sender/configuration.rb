@@ -5,6 +5,9 @@ module SlackSender
     SUPPORTED_ASYNC_BACKENDS = %i[sidekiq active_job].freeze
 
     attr_writer :in_production
+    attr_accessor :enabled
+
+    @enabled = true if @enabled.nil?
 
     def in_production?
       return @in_production unless @in_production.nil?

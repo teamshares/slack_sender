@@ -120,26 +120,47 @@ RSpec.describe SlackSender::Profile do
       allow(SlackSender.config).to receive(:async_backend_available?).and_return(true)
     end
 
-    it "calls DeliveryAxn.call_async with profile name" do
-      expect(SlackSender::DeliveryAxn).to receive(:call_async).with(profile: "test_profile", channel: "C123", text: "test")
-      profile.call(channel: "C123", text: "test")
-    end
-
-    it "returns true" do
-      allow(SlackSender::DeliveryAxn).to receive(:call_async)
-      expect(profile.call(channel: "C123", text: "test")).to be true
-    end
-
-    context "when profile is not registered" do
+    context "when config.enabled is true" do
       before do
-        profile.remove_instance_variable(:@registered_name) if profile.instance_variable_defined?(:@registered_name)
+        allow(SlackSender.config).to receive(:enabled).and_return(true)
       end
 
-      it "raises an error" do
-        expect { profile.call(channel: "C123", text: "test") }.to raise_error(
-          SlackSender::Error,
-          "Profile must be registered before using async delivery. Register it with SlackSender.register(name, config)",
-        )
+      it "calls DeliveryAxn.call_async with profile name" do
+        expect(SlackSender::DeliveryAxn).to receive(:call_async).with(profile: "test_profile", channel: "C123", text: "test")
+        profile.call(channel: "C123", text: "test")
+      end
+
+      it "returns true" do
+        allow(SlackSender::DeliveryAxn).to receive(:call_async)
+        expect(profile.call(channel: "C123", text: "test")).to be true
+      end
+
+      context "when profile is not registered" do
+        before do
+          profile.remove_instance_variable(:@registered_name) if profile.instance_variable_defined?(:@registered_name)
+        end
+
+        it "raises an error" do
+          expect { profile.call(channel: "C123", text: "test") }.to raise_error(
+            SlackSender::Error,
+            "Profile must be registered before using async delivery. Register it with SlackSender.register(name, config)",
+          )
+        end
+      end
+    end
+
+    context "when config.enabled is false" do
+      before do
+        allow(SlackSender.config).to receive(:enabled).and_return(false)
+      end
+
+      it "does not call DeliveryAxn.call_async" do
+        expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
+        profile.call(channel: "C123", text: "test")
+      end
+
+      it "returns false" do
+        expect(profile.call(channel: "C123", text: "test")).to be false
       end
     end
   end
@@ -147,9 +168,30 @@ RSpec.describe SlackSender::Profile do
   describe "#call!" do
     let(:result) { instance_double("Result", thread_ts: "123.456") }
 
-    it "calls DeliveryAxn.call! with profile" do
-      expect(SlackSender::DeliveryAxn).to receive(:call!).with(profile:, channel: "C123", text: "test").and_return(result)
-      expect(profile.call!(channel: "C123", text: "test")).to eq("123.456")
+    context "when config.enabled is true" do
+      before do
+        allow(SlackSender.config).to receive(:enabled).and_return(true)
+      end
+
+      it "calls DeliveryAxn.call! with profile" do
+        expect(SlackSender::DeliveryAxn).to receive(:call!).with(profile:, channel: "C123", text: "test").and_return(result)
+        expect(profile.call!(channel: "C123", text: "test")).to eq("123.456")
+      end
+    end
+
+    context "when config.enabled is false" do
+      before do
+        allow(SlackSender.config).to receive(:enabled).and_return(false)
+      end
+
+      it "does not call DeliveryAxn.call!" do
+        expect(SlackSender::DeliveryAxn).not_to receive(:call!)
+        profile.call!(channel: "C123", text: "test")
+      end
+
+      it "returns false" do
+        expect(profile.call!(channel: "C123", text: "test")).to be false
+      end
     end
   end
 

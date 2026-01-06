@@ -15,6 +15,8 @@ module SlackSender
     end
 
     def call(**kwargs)
+      return false unless SlackSender.config.enabled
+
       # Validate async backend is configured and available
       unless SlackSender.config.async_backend_available?
         raise Error,
@@ -41,6 +43,8 @@ module SlackSender
     end
 
     def call!(**)
+      return false unless SlackSender.config.enabled
+
       DeliveryAxn.call!(profile: self, **).thread_ts
     end
 
