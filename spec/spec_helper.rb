@@ -4,7 +4,7 @@ require "bundler/setup"
 require "sidekiq"
 Bundler.require(:default, :development)
 
-require "slacker_rb"
+require "slack_sender"
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

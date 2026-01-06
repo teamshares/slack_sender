@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Slacker
+module SlackSender
   module Util
     # Determines retry behavior for Slack API exceptions
     # @param exception [Exception] The exception that occurred

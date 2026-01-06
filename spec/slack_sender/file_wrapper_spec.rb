@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Slacker::FileWrapper do
+RSpec.describe SlackSender::FileWrapper do
   before do
     unless defined?(ActiveStorage::Filename)
       stub_const("ActiveStorage::Filename", Class.new do

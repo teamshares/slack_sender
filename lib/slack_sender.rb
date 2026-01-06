@@ -14,21 +14,21 @@ rescue LoadError
   # ActiveJob is optional for runtime, only needed for async operations
 end
 require "axn"
-require_relative "slacker/version"
-require_relative "slacker/configuration"
-require_relative "slacker/util"
+require_relative "slack_sender/version"
+require_relative "slack_sender/configuration"
+require_relative "slack_sender/util"
 
-module Slacker
+module SlackSender
   class Error < StandardError; end
 end
 
-require_relative "slacker/profile"
-require_relative "slacker/profile_registry"
-require_relative "slacker/delivery_axn"
-require_relative "slacker/file_wrapper"
-require_relative "slacker/multi_file_wrapper"
+require_relative "slack_sender/profile"
+require_relative "slack_sender/profile_registry"
+require_relative "slack_sender/delivery_axn"
+require_relative "slack_sender/file_wrapper"
+require_relative "slack_sender/multi_file_wrapper"
 
-module Slacker
+module SlackSender
   class << self
     def register(name = nil, **config)
       ProfileRegistry.register(name.presence || :default, config)
@@ -43,7 +43,7 @@ module Slacker
     def default_profile
       ProfileRegistry.find(:default)
     rescue ProfileNotFound
-      raise Error, "No default profile set. Call Slacker.register(...) first"
+      raise Error, "No default profile set. Call SlackSender.register(...) first"
     end
 
     def call(**) = default_profile.call(**)

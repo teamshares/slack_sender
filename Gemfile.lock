@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    slacker-rb (0.1.0.alpha)
+    slack_sender (0.1.0.alpha)
       axn (= 0.1.0.pre.alpha.3)
       slack-ruby-client
 
@@ -151,7 +151,7 @@ DEPENDENCIES
   rspec (~> 3.0)
   rubocop (~> 1.21)
   sidekiq
-  slacker-rb!
+  slack_sender!
 
 BUNDLED WITH
    2.6.8

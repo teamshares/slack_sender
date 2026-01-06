@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-require_relative "lib/slacker/version"
+require_relative "lib/slack_sender/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "slacker-rb"
-  spec.version = Slacker::VERSION
+  spec.name = "slack_sender"
+  spec.version = SlackSender::VERSION
   spec.authors = ["Kali Donovan"]
   spec.email = ["kali@teamshares.com"]
 
   spec.summary = "Slack messages for people who don’t want to babysit Slack."
   spec.description = "Slack messaging with background dispatch with automatic rate-limit retries."
-  spec.homepage = "https://github.com/teamshares/slacker-rb"
+  spec.homepage = "https://github.com/teamshares/slack_sender"
   spec.license = "MIT"
 
   # NOTE: uses endless methods from 3, literal value omission from 3.1, and Axn which requires 3.2.1+
@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
-  spec.metadata["changelog_uri"] = "https://github.com/teamshares/slacker-rb/blob/main/CHANGELOG.md"
+  spec.metadata["changelog_uri"] = "https://github.com/teamshares/slack_sender/blob/main/CHANGELOG.md"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   # Specify which files should be added to the gem when it is released.

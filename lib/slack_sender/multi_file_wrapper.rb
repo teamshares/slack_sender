@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Slacker
+module SlackSender
   class MultiFileWrapper
     attr_reader :files
 

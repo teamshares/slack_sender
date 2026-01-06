@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Slacker
+module SlackSender
   class Configuration
     SUPPORTED_ASYNC_BACKENDS = %i[sidekiq active_job].freeze
 
@@ -25,7 +25,7 @@ module Slacker
         raise ArgumentError,
               "Unsupported async backend: #{value.inspect}. " \
               "Supported backends: #{SUPPORTED_ASYNC_BACKENDS.inspect}. " \
-              "Please update Slacker to support this backend."
+              "Please update SlackSender to support this backend."
       end
 
       @async_backend = value

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Slacker::Profile do
+RSpec.describe SlackSender::Profile do
   let(:profile) do
     described_class.new(
       token: "SLACK_API_TOKEN",
@@ -117,16 +117,16 @@ RSpec.describe Slacker::Profile do
     before do
       # Set the registered_name on the profile instance
       profile.instance_variable_set(:@registered_name, :test_profile)
-      allow(Slacker.config).to receive(:async_backend_available?).and_return(true)
+      allow(SlackSender.config).to receive(:async_backend_available?).and_return(true)
     end
 
     it "calls DeliveryAxn.call_async with profile name" do
-      expect(Slacker::DeliveryAxn).to receive(:call_async).with(profile: "test_profile", channel: "C123", text: "test")
+      expect(SlackSender::DeliveryAxn).to receive(:call_async).with(profile: "test_profile", channel: "C123", text: "test")
       profile.call(channel: "C123", text: "test")
     end
 
     it "returns true" do
-      allow(Slacker::DeliveryAxn).to receive(:call_async)
+      allow(SlackSender::DeliveryAxn).to receive(:call_async)
       expect(profile.call(channel: "C123", text: "test")).to be true
     end
 
@@ -137,8 +137,8 @@ RSpec.describe Slacker::Profile do
 
       it "raises an error" do
         expect { profile.call(channel: "C123", text: "test") }.to raise_error(
-          Slacker::Error,
-          "Profile must be registered before using async delivery. Register it with Slacker.register(name, config)",
+          SlackSender::Error,
+          "Profile must be registered before using async delivery. Register it with SlackSender.register(name, config)",
         )
       end
     end
@@ -148,14 +148,14 @@ RSpec.describe Slacker::Profile do
     let(:result) { instance_double("Result", thread_ts: "123.456") }
 
     it "calls DeliveryAxn.call! with profile" do
-      expect(Slacker::DeliveryAxn).to receive(:call!).with(profile:, channel: "C123", text: "test").and_return(result)
+      expect(SlackSender::DeliveryAxn).to receive(:call!).with(profile:, channel: "C123", text: "test").and_return(result)
       expect(profile.call!(channel: "C123", text: "test")).to eq("123.456")
     end
   end
 
   describe "#format_group_mention" do
     before do
-      allow(Slacker.config).to receive(:in_production?).and_return(production?)
+      allow(SlackSender.config).to receive(:in_production?).and_return(production?)
     end
 
     context "in production" do

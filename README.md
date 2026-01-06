@@ -1,15 +1,15 @@
-# Slacker -- Slack messaging: lazy at call time, diligent at delivery time
+# SlackSender -- lazy at call time, diligent at delivery time
 
 Background dispatch with automatic rate-limit retries.
 
-Slacker provides a simple, reliable way to send Slack messages from Ruby applications. It handles rate limiting, retries, error notifications, and development environment redirects automatically.
+SlackSender provides a simple, reliable way to send Slack messages from Ruby applications. It handles rate limiting, retries, error notifications, and development environment redirects automatically.
 
 ## Installation
 
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'slacker-rb'
+gem 'slack_sender'
 ```
 
 And then execute:
@@ -21,7 +21,7 @@ bundle install
 Or install it yourself as:
 
 ```bash
-gem install slacker-rb
+gem install slack_sender
 ```
 
 ## Requirements
@@ -37,7 +37,7 @@ gem install slacker-rb
 Register a profile with your Slack token and channel configuration:
 
 ```ruby
-Slacker.register(
+SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
   dev_channel: 'C1234567890',  # Optional: redirect all messages here in non-production
   error_channel: 'C0987654321', # Optional: receive error notifications here
@@ -55,13 +55,13 @@ Slacker.register(
 
 ```ruby
 # Async delivery (recommended) - uses Sidekiq or ActiveJob
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   text: "Server is running low on memory"
 )
 
 # Synchronous delivery (returns thread timestamp)
-thread_ts = Slacker.call!(
+thread_ts = SlackSender.call!(
   channel: :alerts,
   text: "Deployment completed successfully"
 )
@@ -74,7 +74,7 @@ thread_ts = Slacker.call!(
 Configure async backend and other global settings:
 
 ```ruby
-Slacker.configure do |config|
+SlackSender.configure do |config|
   # Set async backend (auto-detects Sidekiq or ActiveJob if available)
   config.async_backend = :sidekiq  # or :active_job
 
@@ -97,19 +97,19 @@ Register multiple profiles for different Slack workspaces:
 
 ```ruby
 # Default profile
-Slacker.register(
+SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
   channels: { alerts: 'C123' }
 )
 
 # Customer support workspace
-Slacker.register(:support,
+SlackSender.register(:support,
   token: ENV['SUPPORT_SLACK_TOKEN'],
   channels: { tickets: 'C456' }
 )
 
 # Use specific profile
-Slacker.profile(:support).call(
+SlackSender.profile(:support).call(
   channel: :tickets,
   text: "New ticket received"
 )
@@ -131,13 +131,13 @@ Slacker.profile(:support).call(
 
 ```ruby
 # Simple text message
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   text: "Hello, World!"
 )
 
 # With markdown formatting
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   text: "User *#{user.name}* just signed up"
 )
@@ -149,17 +149,17 @@ Channels can be specified as symbols (resolved from profile config) or channel I
 
 ```ruby
 # Using symbol (resolved from channels hash)
-Slacker.call(channel: :alerts, text: "Alert")
+SlackSender.call(channel: :alerts, text: "Alert")
 
 # Using channel ID directly
-Slacker.call(channel: "C1234567890", text: "Alert")
+SlackSender.call(channel: "C1234567890", text: "Alert")
 ```
 
 ### Rich Messages
 
 ```ruby
 # With blocks
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   blocks: [
     {
@@ -173,7 +173,7 @@ Slacker.call(
 )
 
 # With attachments
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   attachments: [
     {
@@ -184,7 +184,7 @@ Slacker.call(
 )
 
 # With custom emoji
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   text: "Robot says hello",
   icon_emoji: "robot"
@@ -195,14 +195,14 @@ Slacker.call(
 
 ```ruby
 # Single file
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   text: "Here's the report",
   files: [File.open("report.pdf")]
 )
 
 # Multiple files
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   text: "Multiple files attached",
   files: [
@@ -212,7 +212,7 @@ Slacker.call(
 )
 
 # File with metadata
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   files: [{
     file: File.open("report.pdf"),
@@ -226,14 +226,14 @@ Slacker.call(
 
 ```ruby
 # Reply to a thread
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   text: "This is a reply",
   thread_ts: "1234567890.123456"
 )
 
 # Get thread timestamp from initial message
-thread_ts = Slacker.call!(
+thread_ts = SlackSender.call!(
   channel: :alerts,
   text: "Initial message"
 )
@@ -244,7 +244,7 @@ thread_ts = Slacker.call!(
 
 ```ruby
 # Format user group mention (automatically redirects to dev group in non-production)
-Slacker.format_group_mention(:engineers)
+SlackSender.format_group_mention(:engineers)
 # => "<!subteam^S1234567890|@engineers>"
 ```
 
@@ -253,7 +253,7 @@ Slacker.format_group_mention(:engineers)
 Use a callable for the token to fetch it dynamically:
 
 ```ruby
-Slacker.register(
+SlackSender.register(
   token: -> { SecretsManager.get_slack_token },
   channels: { alerts: 'C123' }
 )
@@ -264,7 +264,7 @@ Slacker.register(
 In non-production environments, messages are automatically redirected to the `dev_channel` if configured:
 
 ```ruby
-Slacker.register(
+SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
   dev_channel: 'C1234567890',  # All messages go here in dev
   channels: {
@@ -273,7 +273,7 @@ Slacker.register(
 )
 
 # In development, this goes to dev_channel with a prefix
-Slacker.call(
+SlackSender.call(
   channel: :production_alerts,
   text: "Critical alert"
 )
@@ -283,7 +283,7 @@ Slacker.call(
 Customize the redirect prefix:
 
 ```ruby
-Slacker.register(
+SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
   dev_channel: 'C1234567890',
   dev_channel_redirect_prefix: "🚧 Dev redirect: %s",
@@ -293,7 +293,7 @@ Slacker.register(
 
 ## Error Handling
 
-Slacker automatically handles common Slack API errors:
+SlackSender automatically handles common Slack API errors:
 
 - **Not In Channel**: Sends error notification to `error_channel` (if configured)
 - **Channel Not Found**: Sends error notification to `error_channel` (if configured)
@@ -309,7 +309,7 @@ If Sidekiq is available, it's automatically used:
 
 ```ruby
 # No configuration needed - auto-detected
-Slacker.call(channel: :alerts, text: "Message")
+SlackSender.call(channel: :alerts, text: "Message")
 ```
 
 ### ActiveJob
@@ -317,7 +317,7 @@ Slacker.call(channel: :alerts, text: "Message")
 If ActiveJob is available, it can be used:
 
 ```ruby
-Slacker.configure do |config|
+SlackSender.configure do |config|
   config.async_backend = :active_job
 end
 ```
@@ -328,7 +328,7 @@ For synchronous delivery (no background job):
 
 ```ruby
 # Returns thread timestamp immediately
-thread_ts = Slacker.call!(
+thread_ts = SlackSender.call!(
   channel: :alerts,
   text: "Message"
 )
@@ -338,7 +338,7 @@ thread_ts = Slacker.call!(
 
 ## Rate Limiting & Retries
 
-When using async delivery, Slacker automatically:
+When using async delivery, SlackSender automatically:
 
 - Detects rate limit errors from Slack API responses
 - Extracts `Retry-After` header value
@@ -352,12 +352,12 @@ Rate limit handling works with both Sidekiq and ActiveJob backends.
 To prevent large files from overloading your job queue, set a maximum file size:
 
 ```ruby
-Slacker.configure do |config|
+SlackSender.configure do |config|
   config.max_background_file_size = 10.megabytes
 end
 
 # This will raise an error if total file size exceeds limit
-Slacker.call(
+SlackSender.call(
   channel: :alerts,
   files: [large_file]  # Raises if > 10MB
 )
@@ -368,7 +368,7 @@ Slacker.call(
 ### Deployment Notifications
 
 ```ruby
-Slacker.call(
+SlackSender.call(
   channel: :deployments,
   text: "Deployment to #{Rails.env} completed",
   blocks: [
@@ -386,7 +386,7 @@ Slacker.call(
 ### Error Alerts
 
 ```ruby
-Slacker.call(
+SlackSender.call(
   channel: :errors,
   text: "Error in payment processing",
   attachments: [
@@ -406,7 +406,7 @@ Slacker.call(
 ```ruby
 # Generate and send report
 report = generate_daily_report
-Slacker.call(
+SlackSender.call(
   channel: :reports,
   text: "Daily Report - #{Date.today}",
   files: [report.to_file]
@@ -421,4 +421,4 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/teamshares/slacker-rb.
+Bug reports and pull requests are welcome on GitHub at https://github.com/teamshares/slack_sender.
