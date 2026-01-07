@@ -7,7 +7,9 @@ module SlackSender
     attr_writer :in_production
     attr_accessor :enabled, :ignore_archived_errors
 
+    puts "enabled 1: #{@enabled.inspect}"
     @enabled = true if @enabled.nil?
+    puts "enabled 2: #{@enabled.inspect}"
 
     def in_production?
       return @in_production unless @in_production.nil?
