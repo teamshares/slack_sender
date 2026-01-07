@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "csv"
+
 RSpec.describe SlackSender::DeliveryAxn do
   let(:profile) do
     SlackSender::Profile.new(
@@ -351,6 +353,31 @@ RSpec.describe SlackSender::DeliveryAxn do
 
       it "exposes thread_ts from file info" do
         expect(result.thread_ts).to eq("123.456")
+      end
+
+      context "with single file object not wrapped in array" do
+        let(:csv_file) do
+          csv_content = CSV.generate(headers: ["Header 1", "Header 2", "Header 3"], write_headers: true) do |csv|
+            csv << ["Value 1", "Value 2", "Value 3"]
+            csv << ["Value 1", "Value 2", "Value 3"]
+          end
+          csv = StringIO.new(csv_content)
+          csv.define_singleton_method(:original_filename) { "test.csv" }
+          csv
+        end
+        let(:files) { csv_file }
+
+        it "treats single file object as one file, not multiple files from lines" do
+          expect(client_dbl).to receive(:files_upload_v2) do |args|
+            # Verify only one file is uploaded, not multiple files from CSV lines
+            expect(args[:files].length).to eq(1)
+            expect(args[:files].first[:filename]).to eq("test.csv")
+            expect(args[:files].first[:content]).to include("Header 1", "Header 2", "Header 3")
+            { "files" => [{ "id" => "f_123" }] }
+          end
+
+          expect(result).to be_ok
+        end
       end
 
       context "with private channel shares" do

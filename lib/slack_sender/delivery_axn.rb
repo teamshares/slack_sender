@@ -34,7 +34,7 @@ module SlackSender
     expects :attachments, type: Array, optional: true
     expects :thread_ts, type: String, optional: true
     expects :files, type: Array, optional: true, preprocess: lambda { |raw|
-      Array(raw).presence&.each_with_index&.map { |f, i| SlackSender::FileWrapper.wrap(f, i) }
+      MultiFileWrapper.new(raw).files
     }
 
     exposes :thread_ts, type: String, optional: true
