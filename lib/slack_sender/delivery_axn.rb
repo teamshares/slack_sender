@@ -2,6 +2,7 @@
 
 require_relative "delivery_axn/async_configuration"
 require_relative "delivery_axn/exception_handlers"
+require_relative "delivery_axn/error_message_parsing"
 require_relative "delivery_axn/validation"
 require_relative "delivery_axn/channel_resolution"
 
@@ -14,6 +15,7 @@ module SlackSender
 
     # Instance method modules (include)
     include ExceptionHandlers
+    include ErrorMessageParsing
     include Validation
     include ChannelResolution
 

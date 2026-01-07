@@ -605,6 +605,129 @@ RSpec.describe SlackSender::DeliveryAxn do
           end
         end
       end
+
+      describe "error message parsing" do
+        subject(:result) { action_class.call(profile:, channel:, text:) }
+
+        context "when SlackError has hash response" do
+          let(:error_response) do
+            {
+              "ok" => false,
+              "error" => "invalid_arguments",
+              "needed" => "channel",
+              "provided" => "text",
+              "response_metadata" => {
+                "messages" => ["Invalid channel provided", "Channel does not exist"],
+              },
+            }
+          end
+
+          before do
+            slack_error = Slack::Web::Api::Errors::SlackError.new("invalid_arguments")
+            allow(slack_error).to receive(:response).and_return(error_response)
+            allow(slack_error).to receive(:error).and_return("invalid_arguments")
+            allow(slack_error).to receive(:response_metadata).and_return(nil)
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(slack_error)
+          end
+
+          it "parses error message with all fields" do
+            expect(result).not_to be_ok
+            expect(result.error).to include("invalid_arguments")
+            expect(result.error).to include("needed=channel")
+            expect(result.error).to include("provided=text")
+            expect(result.error).to include("Invalid channel provided; Channel does not exist")
+          end
+        end
+
+        context "when SlackError has Faraday::Response object" do
+          let(:faraday_response) do
+            double("Faraday::Response", body: {
+                     "ok" => false,
+                     "error" => "invalid_arguments",
+                     "needed" => "channel",
+                     "provided" => "text",
+                   })
+          end
+
+          before do
+            slack_error = Slack::Web::Api::Errors::SlackError.new("invalid_arguments")
+            allow(slack_error).to receive(:response).and_return(faraday_response)
+            allow(slack_error).to receive(:error).and_return("invalid_arguments")
+            allow(slack_error).to receive(:response_metadata).and_return(nil)
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(slack_error)
+          end
+
+          it "extracts body from Faraday::Response and parses error message" do
+            expect(result).not_to be_ok
+            expect(result.error).to include("invalid_arguments")
+            expect(result.error).to include("needed=channel")
+            expect(result.error).to include("provided=text")
+          end
+        end
+
+        context "when SlackError has nil response" do
+          before do
+            slack_error = Slack::Web::Api::Errors::SlackError.new("unknown_error")
+            allow(slack_error).to receive(:response).and_return(nil)
+            allow(slack_error).to receive(:error).and_return("unknown_error")
+            allow(slack_error).to receive(:response_metadata).and_return(nil)
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(slack_error)
+          end
+
+          it "handles nil response gracefully" do
+            expect(result).not_to be_ok
+            expect(result.error).to eq("unknown_error")
+          end
+        end
+
+        context "when SlackError has response_metadata on exception" do
+          let(:response_metadata) do
+            {
+              "messages" => ["Custom error message from metadata"],
+            }
+          end
+
+          before do
+            slack_error = Slack::Web::Api::Errors::SlackError.new("invalid_arguments")
+            allow(slack_error).to receive(:response).and_return({})
+            allow(slack_error).to receive(:error).and_return("invalid_arguments")
+            allow(slack_error).to receive(:response_metadata).and_return(response_metadata)
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(slack_error)
+          end
+
+          it "uses response_metadata from exception when available" do
+            expect(result).not_to be_ok
+            expect(result.error).to include("invalid_arguments")
+            expect(result.error).to include("Custom error message from metadata")
+          end
+        end
+
+        context "when SlackError has extra fields in response" do
+          let(:error_response) do
+            {
+              "ok" => false,
+              "error" => "invalid_arguments",
+              "custom_field" => "custom_value",
+              "another_field" => 123,
+            }
+          end
+
+          before do
+            slack_error = Slack::Web::Api::Errors::SlackError.new("invalid_arguments")
+            allow(slack_error).to receive(:response).and_return(error_response)
+            allow(slack_error).to receive(:error).and_return("invalid_arguments")
+            allow(slack_error).to receive(:response_metadata).and_return(nil)
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(slack_error)
+          end
+
+          it "includes extra fields in error message" do
+            expect(result).not_to be_ok
+            expect(result.error).to include("invalid_arguments")
+            expect(result.error).to include("custom_field")
+            expect(result.error).to include("another_field")
+          end
+        end
+      end
     end
   end
 
