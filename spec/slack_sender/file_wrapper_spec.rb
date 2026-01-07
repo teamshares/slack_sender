@@ -23,6 +23,46 @@ RSpec.describe SlackSender::FileWrapper do
       expect(wrapper.index).to eq(0)
       expect(wrapper.content).to eq("content")
     end
+
+    context "when given an existing FileWrapper" do
+      let(:original) { described_class.new(StringIO.new("content"), 0) }
+
+      it "returns the same FileWrapper instance" do
+        wrapped = described_class.wrap(original, 5)
+
+        expect(wrapped).to be(original)
+        expect(wrapped.index).to eq(0) # Preserves original index
+      end
+    end
+
+    context "when given a file path as string" do
+      let(:tempfile) { Tempfile.new(["test", ".txt"]) }
+
+      before do
+        tempfile.write("file path content")
+        tempfile.close
+      end
+
+      after do
+        tempfile.unlink
+      end
+
+      it "opens and reads the file" do
+        wrapper = described_class.wrap(tempfile.path, 0)
+
+        expect(wrapper.content).to eq("file path content")
+        expect(wrapper.filename).to match(/test.*\.txt/)
+      end
+    end
+
+    context "when given a file path that does not exist" do
+      it "treats it as string content" do
+        wrapper = described_class.wrap("/nonexistent/path/file.txt", 0)
+
+        expect(wrapper.content).to eq("/nonexistent/path/file.txt")
+        expect(wrapper.filename).to eq("attachment 1")
+      end
+    end
   end
 
   describe "#filename" do

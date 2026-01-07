@@ -232,4 +232,57 @@ RSpec.describe SlackSender do
       end
     end
   end
+
+  describe ".[]" do
+    let!(:profile) do
+      described_class.register(:custom_profile,
+                               token: "TEST_TOKEN",
+                               dev_channel: "C123",
+                               channels: {},
+                               user_groups: {})
+    end
+
+    it "is an alias for .profile" do
+      expect(described_class[:custom_profile]).to eq(profile)
+    end
+
+    it "returns the same profile as .profile" do
+      expect(described_class[:custom_profile]).to eq(described_class.profile(:custom_profile))
+    end
+
+    it "raises ProfileNotFound for unknown profile" do
+      expect { described_class[:unknown] }.to raise_error(SlackSender::ProfileNotFound)
+    end
+  end
+
+  describe ".format_group_mention" do
+    let!(:profile) do
+      described_class.register(
+        token: "TEST_TOKEN",
+        dev_channel: "C123",
+        channels: {},
+        user_groups: { eng_team: "S123ABC", slack_development: "S_DEV" },
+      )
+    end
+
+    before do
+      allow(SlackSender.config).to receive(:in_production?).and_return(true)
+    end
+
+    it "delegates to default_profile.format_group_mention" do
+      expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S123ABC>")
+    end
+
+    context "when default profile is not set" do
+      before do
+        SlackSender::ProfileRegistry.clear!
+      end
+
+      it "raises an error" do
+        expect do
+          described_class.format_group_mention(:eng_team)
+        end.to raise_error(SlackSender::Error, /No default profile set/)
+      end
+    end
+  end
 end

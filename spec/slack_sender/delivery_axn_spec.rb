@@ -476,6 +476,68 @@ RSpec.describe SlackSender::DeliveryAxn do
         end
       end
 
+      context "when error notification itself fails" do
+        subject(:result) { action_class.call!(profile:, channel:, text:) }
+
+        before do
+          call_count = 0
+          allow(client_dbl).to receive(:chat_postMessage) do
+            call_count += 1
+            raise Slack::Web::Api::Errors::NotInChannel, "not_in_channel" if call_count == 1
+
+            raise StandardError, "error channel also failed"
+          end
+        end
+
+        context "with error_notifier configured" do
+          let(:notifier) { double("notifier", call: nil) }
+
+          before do
+            allow(SlackSender.config).to receive(:error_notifier).and_return(notifier)
+          end
+
+          it "calls the error_notifier with exception and context" do
+            expect(notifier).to receive(:call) do |exception, context:|
+              expect(exception).to be_a(StandardError)
+              expect(context).to have_key(:original_error_message)
+            end
+
+            expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
+          end
+        end
+
+        context "with Honeybadger available (no error_notifier)" do
+          let(:honeybadger_mock) { double("Honeybadger", notify: nil) }
+
+          before do
+            allow(SlackSender.config).to receive(:error_notifier).and_return(nil)
+            stub_const("Honeybadger", honeybadger_mock)
+          end
+
+          it "notifies Honeybadger with exception and context" do
+            expect(honeybadger_mock).to receive(:notify) do |exception, options|
+              expect(exception).to be_a(StandardError)
+              expect(options[:context]).to have_key(:original_error_message)
+            end
+
+            expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
+          end
+        end
+
+        context "without error_notifier or Honeybadger" do
+          before do
+            allow(SlackSender.config).to receive(:error_notifier).and_return(nil)
+            hide_const("Honeybadger") if defined?(Honeybadger)
+          end
+
+          it "logs warning as last resort" do
+            expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*WHILE REPORTING ERROR/m)
+
+            expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
+          end
+        end
+      end
+
       context "when IsArchived error occurs" do
         subject(:result) { action_class.call(profile:, channel:, text:) }
 

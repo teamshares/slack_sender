@@ -180,6 +180,62 @@ RSpec.describe SlackSender::Profile do
           )
         end
       end
+
+      context "when async backend is not available" do
+        before do
+          allow(SlackSender.config).to receive(:async_backend_available?).and_return(false)
+        end
+
+        it "raises an error about missing async backend" do
+          expect { profile.call(channel: "C123", text: "test") }.to raise_error(
+            SlackSender::Error,
+            /No async backend configured/,
+          )
+        end
+      end
+
+      context "with files" do
+        let(:file1) { StringIO.new("x" * 500) }
+        let(:file2) { StringIO.new("y" * 600) }
+
+        context "when total file size exceeds max_background_file_size" do
+          before do
+            allow(SlackSender.config).to receive(:max_background_file_size).and_return(1000)
+          end
+
+          it "raises an error about file size limit" do
+            expect { profile.call(channel: "C123", text: "test", files: [file1, file2]) }.to raise_error(
+              SlackSender::Error,
+              /Total file size \(1100 bytes\) exceeds configured limit \(1000 bytes\)/,
+            )
+          end
+        end
+
+        context "when total file size is within max_background_file_size" do
+          before do
+            allow(SlackSender.config).to receive(:max_background_file_size).and_return(2000)
+            allow(SlackSender::DeliveryAxn).to receive(:call_async)
+          end
+
+          it "proceeds with async call" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async)
+            profile.call(channel: "C123", text: "test", files: [file1, file2])
+          end
+        end
+
+        context "when max_background_file_size is nil (no limit)" do
+          before do
+            allow(SlackSender.config).to receive(:max_background_file_size).and_return(nil)
+            allow(SlackSender::DeliveryAxn).to receive(:call_async)
+          end
+
+          it "proceeds with async call regardless of size" do
+            large_file = StringIO.new("x" * 10_000_000)
+            expect(SlackSender::DeliveryAxn).to receive(:call_async)
+            profile.call(channel: "C123", text: "test", files: [large_file])
+          end
+        end
+      end
     end
 
     context "when config.enabled is false" do
