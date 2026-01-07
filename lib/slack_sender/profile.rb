@@ -78,6 +78,33 @@ module SlackSender
           kwargs[:channel] = kwargs[:channel].to_s
           kwargs[:validate_known_channel] = true
         end
+
+        # Convert symbol keys to strings in blocks and attachments for JSON serialization
+        # This ensures they're serializable for async jobs (Sidekiq/ActiveJob)
+        if kwargs[:blocks].present?
+          kwargs[:blocks] = deep_stringify_keys(kwargs[:blocks])
+        else
+          kwargs.delete(:blocks)
+        end
+
+        if kwargs[:attachments].present?
+          kwargs[:attachments] = deep_stringify_keys(kwargs[:attachments])
+        else
+          kwargs.delete(:attachments)
+        end
+      end
+    end
+
+    # Deep convert hash keys from symbols to strings for JSON serialization
+    # Uses ActiveSupport's deep_stringify_keys for hashes, and handles arrays recursively
+    def deep_stringify_keys(value)
+      case value
+      when Array
+        value.map { |item| deep_stringify_keys(item) }
+      when Hash
+        value.deep_stringify_keys
+      else
+        value
       end
     end
   end

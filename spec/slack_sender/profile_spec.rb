@@ -168,6 +168,168 @@ RSpec.describe SlackSender::Profile do
         end
       end
 
+      context "with blocks containing symbol keys" do
+        let(:blocks_with_symbols) do
+          [
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: ":incoming_envelope: *A block!* :tada:",
+              },
+            },
+            {
+              type: "divider",
+            },
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: "Has some text.",
+              },
+            },
+          ]
+        end
+
+        it "converts symbol keys to string keys for JSON serialization" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+            expect(kwargs[:blocks]).to be_an(Array)
+            expect(kwargs[:blocks].length).to eq(3)
+
+            # First block
+            first_block = kwargs[:blocks][0]
+            expect(first_block).to be_a(Hash)
+            expect(first_block.keys).to all(be_a(String))
+            expect(first_block["type"]).to eq("section")
+            expect(first_block["text"]).to be_a(Hash)
+            expect(first_block["text"]["type"]).to eq("mrkdwn")
+            expect(first_block["text"]["text"]).to eq(":incoming_envelope: *A block!* :tada:")
+
+            # Second block
+            second_block = kwargs[:blocks][1]
+            expect(second_block["type"]).to eq("divider")
+
+            # Third block
+            third_block = kwargs[:blocks][2]
+            expect(third_block["type"]).to eq("section")
+            expect(third_block["text"]["type"]).to eq("mrkdwn")
+            expect(third_block["text"]["text"]).to eq("Has some text.")
+          end
+
+          profile.call(channel: "C123", blocks: blocks_with_symbols)
+        end
+      end
+
+      context "with attachments containing symbol keys" do
+        let(:attachments_with_symbols) do
+          [
+            {
+              color: "good",
+              title: "Success",
+              text: "Everything worked!",
+              fields: [
+                {
+                  title: "Field 1",
+                  value: "Value 1",
+                  short: true,
+                },
+              ],
+            },
+          ]
+        end
+
+        it "converts symbol keys to string keys for JSON serialization" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+            expect(kwargs[:attachments]).to be_an(Array)
+            expect(kwargs[:attachments].length).to eq(1)
+
+            attachment = kwargs[:attachments][0]
+            expect(attachment).to be_a(Hash)
+            expect(attachment.keys).to all(be_a(String))
+            expect(attachment["color"]).to eq("good")
+            expect(attachment["title"]).to eq("Success")
+            expect(attachment["text"]).to eq("Everything worked!")
+            expect(attachment["fields"]).to be_an(Array)
+            expect(attachment["fields"][0]["title"]).to eq("Field 1")
+            expect(attachment["fields"][0]["value"]).to eq("Value 1")
+            expect(attachment["fields"][0]["short"]).to be true
+          end
+
+          profile.call(channel: "C123", attachments: attachments_with_symbols)
+        end
+      end
+
+      context "with blocks already using string keys" do
+        let(:blocks_with_strings) do
+          [
+            {
+              "type" => "section",
+              "text" => {
+                "type" => "mrkdwn",
+                "text" => "Already strings",
+              },
+            },
+          ]
+        end
+
+        it "leaves string keys unchanged" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+            expect(kwargs[:blocks][0]["type"]).to eq("section")
+            expect(kwargs[:blocks][0]["text"]["text"]).to eq("Already strings")
+          end
+
+          profile.call(channel: "C123", blocks: blocks_with_strings)
+        end
+      end
+
+      context "with mixed symbol and string keys in blocks" do
+        let(:blocks_mixed) do
+          [
+            {
+              type: "section",
+              "text" => {
+                type: "mrkdwn",
+                "text" => "Mixed keys",
+              },
+            },
+          ]
+        end
+
+        it "converts all symbol keys to strings while preserving string keys" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+            block = kwargs[:blocks][0]
+            expect(block.keys).to all(be_a(String))
+            expect(block["type"]).to eq("section")
+            expect(block["text"]["type"]).to eq("mrkdwn")
+            expect(block["text"]["text"]).to eq("Mixed keys")
+          end
+
+          profile.call(channel: "C123", blocks: blocks_mixed)
+        end
+      end
+
+      context "with nil blocks" do
+        it "does not raise error" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            profile: "test_profile",
+            channel: "C123",
+            text: "test",
+          )
+          profile.call(channel: "C123", text: "test", blocks: nil)
+        end
+      end
+
+      context "with empty blocks array" do
+        it "does not raise error" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            profile: "test_profile",
+            channel: "C123",
+            text: "test",
+          )
+          profile.call(channel: "C123", text: "test", blocks: [])
+        end
+      end
+
       context "when profile is not registered" do
         before do
           profile.remove_instance_variable(:@registered_name) if profile.instance_variable_defined?(:@registered_name)
@@ -297,6 +459,58 @@ RSpec.describe SlackSender::Profile do
             text: "test",
           ).and_return(result)
           expect(profile.call!(channel: "C123", text: "test")).to eq("123.456")
+        end
+      end
+
+      context "with blocks containing symbol keys" do
+        let(:blocks_with_symbols) do
+          [
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: "Test block",
+              },
+            },
+          ]
+        end
+
+        it "converts symbol keys to string keys" do
+          expect(SlackSender::DeliveryAxn).to receive(:call!) do |kwargs|
+            expect(kwargs[:blocks]).to be_an(Array)
+            block = kwargs[:blocks][0]
+            expect(block.keys).to all(be_a(String))
+            expect(block["type"]).to eq("section")
+            expect(block["text"]["type"]).to eq("mrkdwn")
+            expect(block["text"]["text"]).to eq("Test block")
+          end.and_return(result)
+
+          profile.call!(channel: "C123", blocks: blocks_with_symbols)
+        end
+      end
+
+      context "with attachments containing symbol keys" do
+        let(:attachments_with_symbols) do
+          [
+            {
+              color: "warning",
+              title: "Warning",
+              text: "Something happened",
+            },
+          ]
+        end
+
+        it "converts symbol keys to string keys" do
+          expect(SlackSender::DeliveryAxn).to receive(:call!) do |kwargs|
+            expect(kwargs[:attachments]).to be_an(Array)
+            attachment = kwargs[:attachments][0]
+            expect(attachment.keys).to all(be_a(String))
+            expect(attachment["color"]).to eq("warning")
+            expect(attachment["title"]).to eq("Warning")
+            expect(attachment["text"]).to eq("Something happened")
+          end.and_return(result)
+
+          profile.call!(channel: "C123", attachments: attachments_with_symbols)
         end
       end
     end
