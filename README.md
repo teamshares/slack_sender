@@ -40,6 +40,7 @@ Register a profile with your Slack token and channel configuration:
 SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
   dev_channel: 'C1234567890',  # Optional: redirect all messages here in non-production
+  dev_user_group: 'S_DEV_GROUP',  # Optional: replace all group mentions here in non-production
   error_channel: 'C0987654321', # Optional: receive error notifications here
   channels: {
     alerts: 'C1111111111',
@@ -120,6 +121,7 @@ SlackSender.profile(:support).call(
 
 - `token` - Slack Bot User OAuth Token (string or callable)
 - `dev_channel` - Channel ID to redirect all messages in non-production
+- `dev_user_group` - User group ID to replace all group mentions in non-production (acts like `dev_channel` for user groups)
 - `error_channel` - Channel ID for configuration-related error notifications (NotInChannel, ChannelNotFound, IsArchived). Can be unset/nil to avoid duplicate alerts (warnings will be logged instead). Only used for errors that can still send Slack messages (not auth failures).
 - `channels` - Hash mapping symbol keys to channel IDs
 - `user_groups` - Hash mapping symbol keys to user group IDs
@@ -244,9 +246,25 @@ thread_ts = SlackSender.call!(
 ### User Group Mentions
 
 ```ruby
-# Format user group mention (automatically redirects to dev group in non-production)
+# Format user group mention (automatically redirects to dev_user_group in non-production)
 SlackSender.format_group_mention(:engineers)
 # => "<!subteam^S1234567890|@engineers>"
+```
+
+If `dev_user_group` is configured and the app is not in production (per `config.in_production?`), `format_group_mention` will replace the requested group with the `dev_user_group` instead, similar to how `dev_channel` redirects channel messages:
+
+```ruby
+SlackSender.register(
+  token: ENV['SLACK_BOT_TOKEN'],
+  dev_user_group: 'S_DEV_GROUP',  # All group mentions use this in dev
+  user_groups: {
+    engineers: 'S1234567890',  # Would be replaced with dev_user_group in non-production
+  }
+)
+
+# In development, this returns the dev_user_group mention
+SlackSender.format_group_mention(:engineers)
+# => "<!subteam^S_DEV_GROUP>"
 ```
 
 ### Dynamic Token

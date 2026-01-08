@@ -254,21 +254,60 @@ RSpec.describe SlackSender do
       described_class.register(
         token: "TEST_TOKEN",
         dev_channel: "C123",
-        user_groups: { eng_team: "S123ABC", slack_development: "S_DEV" },
+        user_groups: { eng_team: "S123ABC" },
       )
     end
 
-    before do
-      allow(SlackSender.config).to receive(:in_production?).and_return(true)
+    context "in production" do
+      before do
+        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+      end
+
+      it "delegates to default_profile.format_group_mention" do
+        expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S123ABC>")
+      end
     end
 
-    it "delegates to default_profile.format_group_mention" do
-      expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S123ABC>")
+    context "not in production" do
+      before do
+        allow(SlackSender.config).to receive(:in_production?).and_return(false)
+      end
+
+      context "with dev_user_group configured" do
+        let!(:profile) do
+          described_class.register(
+            token: "TEST_TOKEN",
+            dev_channel: "C123",
+            dev_user_group: "S_DEV_GROUP",
+            user_groups: { eng_team: "S123ABC" },
+          )
+        end
+
+        it "uses dev_user_group instead of requested group" do
+          expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S_DEV_GROUP>")
+        end
+      end
+
+      context "without dev_user_group configured" do
+        let!(:profile) do
+          described_class.register(
+            token: "TEST_TOKEN",
+            dev_channel: "C123",
+            dev_user_group: nil,
+            user_groups: { eng_team: "S123ABC" },
+          )
+        end
+
+        it "uses requested group" do
+          expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S123ABC>")
+        end
+      end
     end
 
     context "when default profile is not set" do
       before do
         SlackSender::ProfileRegistry.clear!
+        allow(SlackSender.config).to receive(:in_production?).and_return(true)
       end
 
       it "raises an error" do

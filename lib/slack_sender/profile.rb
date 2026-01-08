@@ -2,12 +2,14 @@
 
 module SlackSender
   class Profile
-    attr_reader :dev_channel, :error_channel, :channels, :user_groups, :slack_client_config, :dev_channel_redirect_prefix, :key
+    attr_reader :dev_channel, :dev_user_group, :error_channel, :channels, :user_groups, :slack_client_config, :dev_channel_redirect_prefix, :key
 
-    def initialize(key:, token:, dev_channel: nil, error_channel: nil, channels: {}, user_groups: {}, slack_client_config: {}, dev_channel_redirect_prefix: nil)
+    def initialize(key:, token:, dev_channel: nil, dev_user_group: nil, error_channel: nil, channels: {}, user_groups: {}, slack_client_config: {},
+                   dev_channel_redirect_prefix: nil)
       @key = key
       @token = token
       @dev_channel = dev_channel
+      @dev_user_group = dev_user_group
       @error_channel = error_channel
       @channels = channels.freeze
       @user_groups = user_groups.freeze
@@ -54,7 +56,7 @@ module SlackSender
                    key
                  end
 
-      group_id = user_groups[:slack_development] unless SlackSender.config.in_production?
+      group_id = dev_user_group if dev_user_group.present? && !SlackSender.config.in_production?
 
       ::Slack::Messages::Formatting.group_link(group_id)
     end
