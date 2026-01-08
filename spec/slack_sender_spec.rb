@@ -15,8 +15,6 @@ RSpec.describe SlackSender do
         profile = described_class.register(
           token: "TEST_TOKEN",
           dev_channel: "C123",
-          channels: {},
-          user_groups: {},
         )
 
         expect(profile).to be_a(SlackSender::Profile)
@@ -29,16 +27,12 @@ RSpec.describe SlackSender do
         described_class.register(
           token: "TEST_TOKEN",
           dev_channel: "C123",
-          channels: {},
-          user_groups: {},
         )
 
         expect do
           described_class.register(
             token: "OTHER_TOKEN",
             dev_channel: "C456",
-            channels: {},
-            user_groups: {},
           )
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
@@ -46,16 +40,12 @@ RSpec.describe SlackSender do
       it "raises error if :default already registered via explicit :default call" do
         described_class.register(:default,
                                  token: "TEST_TOKEN",
-                                 dev_channel: "C123",
-                                 channels: {},
-                                 user_groups: {})
+                                 dev_channel: "C123")
 
         expect do
           described_class.register(
             token: "OTHER_TOKEN",
             dev_channel: "C456",
-            channels: {},
-            user_groups: {},
           )
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
@@ -65,9 +55,7 @@ RSpec.describe SlackSender do
       it "registers a named :default profile and sets it as default" do
         profile = described_class.register(:default,
                                            token: "TEST_TOKEN",
-                                           dev_channel: "C123",
-                                           channels: {},
-                                           user_groups: {})
+                                           dev_channel: "C123")
 
         expect(profile).to be_a(SlackSender::Profile)
         expect(profile.dev_channel).to eq("C123")
@@ -78,16 +66,12 @@ RSpec.describe SlackSender do
       it "raises error if :default profile already registered" do
         described_class.register(:default,
                                  token: "TEST_TOKEN",
-                                 dev_channel: "C123",
-                                 channels: {},
-                                 user_groups: {})
+                                 dev_channel: "C123")
 
         expect do
           described_class.register(:default,
                                    token: "OTHER_TOKEN",
-                                   dev_channel: "C456",
-                                   channels: {},
-                                   user_groups: {})
+                                   dev_channel: "C456")
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
 
@@ -95,16 +79,12 @@ RSpec.describe SlackSender do
         described_class.register(
           token: "TEST_TOKEN",
           dev_channel: "C123",
-          channels: {},
-          user_groups: {},
         )
 
         expect do
           described_class.register(:default,
                                    token: "OTHER_TOKEN",
-                                   dev_channel: "C456",
-                                   channels: {},
-                                   user_groups: {})
+                                   dev_channel: "C456")
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
 
@@ -112,17 +92,13 @@ RSpec.describe SlackSender do
         profile1 = described_class.register(
           token: "TEST_TOKEN",
           dev_channel: "C123",
-          channels: {},
-          user_groups: {},
         )
 
         SlackSender::ProfileRegistry.clear!
 
         profile2 = described_class.register(:default,
                                             token: "TEST_TOKEN",
-                                            dev_channel: "C123",
-                                            channels: {},
-                                            user_groups: {})
+                                            dev_channel: "C123")
 
         expect(profile1.dev_channel).to eq(profile2.dev_channel)
         expect(profile1.token).to eq(profile2.token)
@@ -133,9 +109,7 @@ RSpec.describe SlackSender do
       it "registers a named profile" do
         profile = described_class.register(:production,
                                            token: "TEST_TOKEN",
-                                           dev_channel: "C123",
-                                           channels: {},
-                                           user_groups: {})
+                                           dev_channel: "C123")
 
         expect(profile).to be_a(SlackSender::Profile)
         expect(profile.dev_channel).to eq("C123")
@@ -145,9 +119,7 @@ RSpec.describe SlackSender do
       it "does not automatically set as default" do
         described_class.register(:production,
                                  token: "TEST_TOKEN",
-                                 dev_channel: "C123",
-                                 channels: {},
-                                 user_groups: {})
+                                 dev_channel: "C123")
 
         expect do
           described_class.default_profile
@@ -157,16 +129,12 @@ RSpec.describe SlackSender do
       it "raises error if profile already registered" do
         described_class.register(:production,
                                  token: "TEST_TOKEN",
-                                 dev_channel: "C123",
-                                 channels: {},
-                                 user_groups: {})
+                                 dev_channel: "C123")
 
         expect do
           described_class.register(:production,
                                    token: "OTHER_TOKEN",
-                                   dev_channel: "C456",
-                                   channels: {},
-                                   user_groups: {})
+                                   dev_channel: "C456")
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
     end
@@ -178,8 +146,6 @@ RSpec.describe SlackSender do
         described_class.register(
           token: "TEST_TOKEN",
           dev_channel: "C123",
-          channels: {},
-          user_groups: {},
         )
       end
 
@@ -203,9 +169,7 @@ RSpec.describe SlackSender do
         let!(:other_profile) do
           described_class.register(:other_profile,
                                    token: "OTHER_TOKEN",
-                                   dev_channel: "C_OTHER",
-                                   channels: {},
-                                   user_groups: {})
+                                   dev_channel: "C_OTHER")
         end
 
         it "allows profile parameter to override default profile" do
@@ -243,8 +207,6 @@ RSpec.describe SlackSender do
         described_class.register(
           token: "TEST_TOKEN",
           dev_channel: "C123",
-          channels: {},
-          user_groups: {},
         )
       end
 
@@ -271,9 +233,7 @@ RSpec.describe SlackSender do
     let!(:profile) do
       described_class.register(:custom_profile,
                                token: "TEST_TOKEN",
-                               dev_channel: "C123",
-                               channels: {},
-                               user_groups: {})
+                               dev_channel: "C123")
     end
 
     it "is an alias for .profile" do
@@ -294,7 +254,6 @@ RSpec.describe SlackSender do
       described_class.register(
         token: "TEST_TOKEN",
         dev_channel: "C123",
-        channels: {},
         user_groups: { eng_team: "S123ABC", slack_development: "S_DEV" },
       )
     end
