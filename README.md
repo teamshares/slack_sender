@@ -83,12 +83,16 @@ SlackSender.configure do |config|
 
   # Limit file size for background jobs (prevents Redis overload)
   config.max_background_file_size = 10.megabytes
+end
 
-  # Custom error notifier (called when Slack errors occur)
-  config.error_notifier = ->(error, context) do
-    Honeybadger.notify(error, context: context)
+# Exception notifications are handled via Axn's on_exception handler
+# SlackSender is built on Axn - configure exception notifications there:
+Axn.configure do |c|
+  c.on_exception = proc do |e, action:, context:|
+    Honeybadger.notify(e, context: { axn_context: context })
   end
 end
+# See https://teamshares.github.io/axn/reference/configuration#on_exception for details
 ```
 
 ### Multiple Profiles
@@ -119,7 +123,7 @@ SlackSender.profile(:support).call(
 
 - `token` - Slack Bot User OAuth Token (string or callable)
 - `dev_channel` - Channel ID to redirect all messages in non-production
-- `error_channel` - Channel ID for error notifications
+- `error_channel` - Channel ID for configuration-related error notifications (NotInChannel, ChannelNotFound, IsArchived). Can be unset/nil to avoid duplicate alerts (warnings will be logged instead). Only used for errors that can still send Slack messages (not auth failures).
 - `channels` - Hash mapping symbol keys to channel IDs
 - `user_groups` - Hash mapping symbol keys to user group IDs
 - `slack_client_config` - Additional options passed to `Slack::Web::Client`
@@ -295,11 +299,13 @@ SlackSender.register(
 
 SlackSender automatically handles common Slack API errors:
 
-- **Not In Channel**: Sends error notification to `error_channel` (if configured)
-- **Channel Not Found**: Sends error notification to `error_channel` (if configured)
+- **Not In Channel**: Sends error notification to `error_channel` (if configured), otherwise logs warning
+- **Channel Not Found**: Sends error notification to `error_channel` (if configured), otherwise logs warning
+- **Channel Is Archived**: Sends error notification to `error_channel` (if configured and `ignore_archived_errors` is false/nil), otherwise logs warning. Can be ignored via `config.ignore_archived_errors = true`
 - **Rate Limits**: Automatically retries with delay from `Retry-After` header
+- **Other Errors**: Authentication and authorization errors (invalid_auth, token_revoked, missing_scope, etc.) log warnings but don't attempt Slack delivery (since they would fail)
 
-Errors are logged or sent to your configured `error_notifier` if the error channel is unavailable.
+For exception notifications to error tracking services (e.g., Honeybadger), configure Axn's `on_exception` handler. See [Axn configuration documentation](https://teamshares.github.io/axn/reference/configuration#on_exception) for details.
 
 ## Async Backends
 

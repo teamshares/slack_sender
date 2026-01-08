@@ -10,11 +10,9 @@ module SlackSender
         key = name.to_sym
         raise DuplicateProfileError, "Profile #{name} already registered" if all.key?(key)
 
-        profile = Profile.new(**config)
-        # Store the name on the profile instance for easy lookup
-        profile.instance_variable_set(:@registered_name, key)
-        all[key] = profile
-        profile
+        Profile.new(key:, **config).tap do |profile|
+          all[key] = profile
+        end
       end
 
       def find(name)

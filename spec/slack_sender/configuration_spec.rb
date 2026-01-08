@@ -25,18 +25,6 @@ RSpec.describe SlackSender::Configuration do
     end
   end
 
-  describe "#error_notifier" do
-    it "defaults to nil" do
-      expect(config.error_notifier).to be_nil
-    end
-
-    it "can be set to a callable" do
-      notifier = ->(e, context:) { puts [e, context].inspect }
-      config.error_notifier = notifier
-      expect(config.error_notifier).to eq(notifier)
-    end
-  end
-
   describe "#max_background_file_size" do
     it "defaults to nil" do
       expect(config.max_background_file_size).to be_nil

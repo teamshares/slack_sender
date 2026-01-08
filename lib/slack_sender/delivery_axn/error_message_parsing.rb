@@ -3,6 +3,18 @@
 module SlackSender
   class DeliveryAxn
     module ErrorMessageParsing
+      EXPLANATIONS = {
+        "invalid_auth" => "Authentication token is invalid or expired. Regenerate token and update configuration.",
+        "token_revoked" => "Authentication token has been revoked. Generate new token and update configuration.",
+        "account_inactive" => "Token belongs to deleted user/workspace. Reactivate account or use valid token.",
+        "missing_scope" => "Token lacks required OAuth scopes. Update app permissions in Slack App settings.",
+        "not_in_channel" => "Slackbot is not connected to channel. Invite bot to channel.",
+        "channel_not_found" => "Channel was not found. Check if channel was renamed or deleted.",
+        "is_archived" => "Channel is archived. Unarchive channel or use a different channel.",
+        "team_not_authorized" => "App needs Enterprise Grid installation.",
+        "user_not_authorized" => "Installing user must be Enterprise Grid owner.",
+      }.freeze
+
       def self.included(base)
         base.error(if: ::Slack::Web::Api::Errors::SlackError) do |exception:|
           message_from_slack_error(exception)
@@ -16,7 +28,12 @@ module SlackSender
         parts = []
 
         # Always include the canonical Slack error code
-        parts << e.error.to_s
+        error_code = e.error.to_s
+        parts << error_code
+
+        # Add human-readable explanation for common error codes
+        explanation = error_explanation(error_code)
+        parts << explanation if explanation
 
         # Handle common error-specific fields
         parts << "needed=#{resp["needed"]}" if resp["needed"]
@@ -37,6 +54,10 @@ module SlackSender
         end
 
         parts.compact.join(" | ")
+      end
+
+      def error_explanation(error_code)
+        self.class::EXPLANATIONS[error_code.to_s]
       end
 
       def normalize_response(resp)

@@ -5,6 +5,7 @@ require "csv"
 RSpec.describe SlackSender::DeliveryAxn do
   let(:profile) do
     SlackSender::Profile.new(
+      key: :test_profile,
       token: "SLACK_API_TOKEN",
       dev_channel: "C01H3KU3B9P",
       error_channel: "C03F1DMJ4PM",
@@ -292,6 +293,7 @@ RSpec.describe SlackSender::DeliveryAxn do
         context "with custom dev_channel_redirect_prefix" do
           let(:profile) do
             SlackSender::Profile.new(
+              key: :test_profile,
               token: "SLACK_API_TOKEN",
               dev_channel: "C01H3KU3B9P",
               error_channel: "C03F1DMJ4PM",
@@ -393,7 +395,10 @@ RSpec.describe SlackSender::DeliveryAxn do
       end
 
       context "when IsArchived error occurs during file upload" do
+        subject(:result) { action_class.call!(profile:, channel:, files:, text:) }
+
         before do
+          allow(SlackSender.config).to receive(:in_production?).and_return(true)
           allow(client_dbl).to receive(:files_upload_v2).and_raise(
             Slack::Web::Api::Errors::IsArchived.new("is_archived"),
           )
@@ -402,10 +407,17 @@ RSpec.describe SlackSender::DeliveryAxn do
         context "when config.ignore_archived_errors is false" do
           before do
             allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(false)
+            call_count = 0
+            allow(client_dbl).to receive(:chat_postMessage) do |args|
+              call_count += 1
+              expect(args[:channel]).to eq(profile.error_channel)
+              expect(args[:text]).to include("Is Archived")
+              { "ts" => "123" }
+            end
           end
 
-          it "fails with the error" do
-            expect(result).not_to be_ok
+          it "sends error notification to error_channel and re-raises" do
+            expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
 
@@ -415,8 +427,9 @@ RSpec.describe SlackSender::DeliveryAxn do
           end
 
           it "succeeds with done message" do
-            expect(result).to be_ok
-            expect(result.message).to eq("Failed successfully: ignoring 'is archived' error per config")
+            result_obj = action_class.call(profile:, channel:, files:, text:)
+            expect(result_obj).to be_ok
+            expect(result_obj.success).to eq("Failed successfully: ignoring 'is archived' error per config")
           end
         end
       end
@@ -481,6 +494,7 @@ RSpec.describe SlackSender::DeliveryAxn do
       context "when error_channel is nil" do
         let(:profile_without_error_channel) do
           SlackSender::Profile.new(
+            key: :test_profile,
             token: "SLACK_API_TOKEN",
             dev_channel: "C01H3KU3B9P",
             error_channel: nil,
@@ -515,92 +529,66 @@ RSpec.describe SlackSender::DeliveryAxn do
           end
         end
 
-        context "with error_notifier configured" do
-          let(:notifier) { double("notifier", call: nil) }
+        it "logs warning when error notification fails" do
+          expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*WHILE REPORTING ERROR/m)
 
-          before do
-            allow(SlackSender.config).to receive(:error_notifier).and_return(notifier)
-          end
-
-          it "calls the error_notifier with exception and context" do
-            expect(notifier).to receive(:call) do |exception, context:|
-              expect(exception).to be_a(StandardError)
-              expect(context).to have_key(:original_error_message)
-            end
-
-            expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-          end
-        end
-
-        context "with Honeybadger available (no error_notifier)" do
-          let(:honeybadger_mock) { double("Honeybadger", notify: nil) }
-
-          before do
-            allow(SlackSender.config).to receive(:error_notifier).and_return(nil)
-            stub_const("Honeybadger", honeybadger_mock)
-          end
-
-          it "notifies Honeybadger with exception and context" do
-            expect(honeybadger_mock).to receive(:notify) do |exception, options|
-              expect(exception).to be_a(StandardError)
-              expect(options[:context]).to have_key(:original_error_message)
-            end
-
-            expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-          end
-        end
-
-        context "without error_notifier or Honeybadger" do
-          before do
-            allow(SlackSender.config).to receive(:error_notifier).and_return(nil)
-            hide_const("Honeybadger") if defined?(Honeybadger)
-          end
-
-          it "logs warning as last resort" do
-            expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*WHILE REPORTING ERROR/m)
-
-            expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-          end
+          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
         end
       end
 
       context "when IsArchived error occurs" do
-        subject(:result) { action_class.call(profile:, channel:, text:) }
-
-        before do
-          allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            Slack::Web::Api::Errors::IsArchived.new("is_archived"),
-          )
-        end
+        subject(:result) { action_class.call!(profile:, channel:, text:) }
 
         context "when config.ignore_archived_errors is false" do
           before do
             allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(false)
+            call_count = 0
+            allow(client_dbl).to receive(:chat_postMessage) do |args|
+              call_count += 1
+              raise Slack::Web::Api::Errors::IsArchived, "is_archived" if call_count == 1
+
+              expect(args[:channel]).to eq(profile.channels[:eng_alerts])
+              expect(args[:text]).to include("Is Archived")
+              { "ts" => "123" }
+            end
           end
 
-          it "fails with the error" do
-            expect(result).not_to be_ok
+          it "sends error notification to error_channel and re-raises" do
+            expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
 
         context "when config.ignore_archived_errors is true" do
           before do
             allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(true)
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(
+              Slack::Web::Api::Errors::IsArchived.new("is_archived"),
+            )
           end
 
           it "succeeds with done message" do
-            expect(result).to be_ok
-            expect(result.message).to eq("Failed successfully: ignoring 'is archived' error per config")
+            result_obj = action_class.call(profile:, channel:, text:)
+            expect(result_obj).to be_ok
+            expect(result_obj.success).to eq("Failed successfully: ignoring 'is archived' error per config")
           end
         end
 
         context "when config.ignore_archived_errors is nil" do
           before do
             allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(nil)
+            call_count = 0
+            allow(client_dbl).to receive(:chat_postMessage) do |args|
+              call_count += 1
+              raise Slack::Web::Api::Errors::IsArchived, "is_archived" if call_count == 1
+
+              expect(args[:channel]).to eq(profile.channels[:eng_alerts])
+              expect(args[:text]).to include("Is Archived")
+              { "ts" => "123" }
+            end
           end
 
-          it "fails with the error" do
-            expect(result).not_to be_ok
+          it "sends error notification to error_channel and re-raises" do
+            expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
       end
@@ -764,6 +752,7 @@ RSpec.describe SlackSender::DeliveryAxn do
     context "with custom dev_channel_redirect_prefix" do
       let(:profile) do
         SlackSender::Profile.new(
+          key: :test_profile,
           token: "SLACK_API_TOKEN",
           dev_channel: "C01H3KU3B9P",
           error_channel: "C03F1DMJ4PM",

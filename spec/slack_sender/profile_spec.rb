@@ -3,6 +3,7 @@
 RSpec.describe SlackSender::Profile do
   let(:profile) do
     described_class.new(
+      key: :test_profile,
       token: "SLACK_API_TOKEN",
       dev_channel: "C01H3KU3B9P",
       error_channel: "C03F1DMJ4PM",
@@ -21,6 +22,7 @@ RSpec.describe SlackSender::Profile do
     context "when token is a callable" do
       let(:profile) do
         described_class.new(
+          key: :test_profile,
           token: -> { ENV.fetch("SLACK_API_TOKEN") },
           dev_channel: "C01H3KU3B9P",
           error_channel: "C03F1DMJ4PM",
@@ -41,6 +43,7 @@ RSpec.describe SlackSender::Profile do
           "token-#{call_count}"
         }
         profile_with_proc = described_class.new(
+          key: :test_profile,
           token: token_proc,
         )
 
@@ -66,6 +69,7 @@ RSpec.describe SlackSender::Profile do
     context "when dev_channel is nil" do
       let(:profile) do
         described_class.new(
+          key: :test_profile,
           token: "SLACK_API_TOKEN",
           dev_channel: nil,
         )
@@ -81,6 +85,7 @@ RSpec.describe SlackSender::Profile do
     context "when dev_channel_redirect_prefix is provided" do
       let(:profile) do
         described_class.new(
+          key: :test_profile,
           token: "SLACK_API_TOKEN",
           dev_channel_redirect_prefix: "Custom prefix: %s",
         )
@@ -94,6 +99,7 @@ RSpec.describe SlackSender::Profile do
     context "when dev_channel_redirect_prefix is nil" do
       let(:profile) do
         described_class.new(
+          key: :test_profile,
           token: "SLACK_API_TOKEN",
           dev_channel_redirect_prefix: nil,
         )
@@ -107,8 +113,8 @@ RSpec.describe SlackSender::Profile do
 
   describe "#call" do
     before do
-      # Set the registered_name on the profile instance
-      profile.instance_variable_set(:@registered_name, :test_profile)
+      # Register the profile in the registry
+      SlackSender::ProfileRegistry.all[profile.key] = profile
       allow(SlackSender.config).to receive(:async_backend_available?).and_return(true)
     end
 
@@ -130,6 +136,7 @@ RSpec.describe SlackSender::Profile do
       context "with symbol channel" do
         let(:profile) do
           described_class.new(
+            key: :test_profile,
             token: "SLACK_API_TOKEN",
             dev_channel: "C01H3KU3B9P",
             error_channel: "C03F1DMJ4PM",
@@ -324,7 +331,7 @@ RSpec.describe SlackSender::Profile do
 
       context "when profile is not registered" do
         before do
-          profile.remove_instance_variable(:@registered_name) if profile.instance_variable_defined?(:@registered_name)
+          SlackSender::ProfileRegistry.all.delete(profile.key)
         end
 
         it "raises an error" do
@@ -412,9 +419,7 @@ RSpec.describe SlackSender::Profile do
         end
 
         context "when called on default profile" do
-          before do
-            default_profile.instance_variable_set(:@registered_name, :default)
-          end
+          # default_profile is already registered via SlackSender.register
 
           it "allows profile parameter to override default profile" do
             expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
@@ -437,7 +442,8 @@ RSpec.describe SlackSender::Profile do
 
         context "when called on non-default profile" do
           before do
-            profile.instance_variable_set(:@registered_name, :test_profile)
+            # Register the profile in the registry
+            SlackSender::ProfileRegistry.all[profile.key] = profile
           end
 
           context "with matching profile parameter" do
@@ -484,6 +490,7 @@ RSpec.describe SlackSender::Profile do
         context "when called on unregistered profile" do
           let(:unregistered_profile) do
             described_class.new(
+              key: :unregistered_profile,
               token: "UNREG_TOKEN",
             )
           end
@@ -532,6 +539,7 @@ RSpec.describe SlackSender::Profile do
       context "with symbol channel" do
         let(:profile) do
           described_class.new(
+            key: :test_profile,
             token: "SLACK_API_TOKEN",
             dev_channel: "C01H3KU3B9P",
             error_channel: "C03F1DMJ4PM",
@@ -635,9 +643,7 @@ RSpec.describe SlackSender::Profile do
         end
 
         context "when called on default profile" do
-          before do
-            default_profile.instance_variable_set(:@registered_name, :default)
-          end
+          # default_profile is already registered via SlackSender.register
 
           it "allows profile parameter to override default profile" do
             # The profile parameter is converted to string and passed to DeliveryAxn,
@@ -653,7 +659,8 @@ RSpec.describe SlackSender::Profile do
 
         context "when called on non-default profile" do
           before do
-            profile.instance_variable_set(:@registered_name, :test_profile)
+            # Register the profile in the registry
+            SlackSender::ProfileRegistry.all[profile.key] = profile
           end
 
           context "with matching profile parameter" do
@@ -682,6 +689,7 @@ RSpec.describe SlackSender::Profile do
         context "when called on unregistered profile" do
           let(:unregistered_profile) do
             described_class.new(
+              key: :unregistered_profile,
               token: "UNREG_TOKEN",
             )
           end
@@ -725,6 +733,7 @@ RSpec.describe SlackSender::Profile do
       context "with symbol key" do
         let(:profile) do
           described_class.new(
+            key: :test_profile,
             token: "SLACK_API_TOKEN",
             user_groups: { eng_team: "S123ABC" },
           )
@@ -758,6 +767,7 @@ RSpec.describe SlackSender::Profile do
       context "with symbol key" do
         let(:profile) do
           described_class.new(
+            key: :test_profile,
             token: "SLACK_API_TOKEN",
             user_groups: {
               eng_team: "S123ABC",
@@ -784,6 +794,7 @@ RSpec.describe SlackSender::Profile do
       context "when slack_development user group is not configured" do
         let(:profile) do
           described_class.new(
+            key: :test_profile,
             token: "SLACK_API_TOKEN",
             user_groups: { eng_team: "S123ABC" },
           )

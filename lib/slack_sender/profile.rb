@@ -2,9 +2,10 @@
 
 module SlackSender
   class Profile
-    attr_reader :dev_channel, :error_channel, :channels, :user_groups, :slack_client_config, :dev_channel_redirect_prefix
+    attr_reader :dev_channel, :error_channel, :channels, :user_groups, :slack_client_config, :dev_channel_redirect_prefix, :key
 
-    def initialize(token:, dev_channel: nil, error_channel: nil, channels: {}, user_groups: {}, slack_client_config: {}, dev_channel_redirect_prefix: nil)
+    def initialize(key:, token:, dev_channel: nil, error_channel: nil, channels: {}, user_groups: {}, slack_client_config: {}, dev_channel_redirect_prefix: nil)
+      @key = key
       @token = token
       @dev_channel = dev_channel
       @error_channel = error_channel
@@ -37,10 +38,12 @@ module SlackSender
         end
       end
 
-      registered_name = instance_variable_get(:@registered_name)
-      raise Error, "Profile must be registered before using async delivery. Register it with SlackSender.register(name, config)" unless registered_name
+      unless ProfileRegistry.all[key] == self
+        raise Error,
+              "Profile must be registered before using async delivery. Register it with SlackSender.register(name, config)"
+      end
 
-      DeliveryAxn.call_async(profile: registered_name.to_s, **kwargs)
+      DeliveryAxn.call_async(profile: key.to_s, **kwargs)
       true
     end
 
@@ -80,11 +83,11 @@ module SlackSender
     def validate_and_handle_profile_parameter!(kwargs)
       return unless kwargs.key?(:profile)
 
-      registered_name = instance_variable_get(:@registered_name)
+      is_registered = ProfileRegistry.all[key] == self
+      registered_name_sym = is_registered ? key.to_sym : nil
       requested_profile = kwargs[:profile]
 
       # Normalize for comparison (handle both symbol and string)
-      registered_name_sym = registered_name&.to_sym
       requested_profile_sym = requested_profile.to_sym
 
       if registered_name_sym == :default
