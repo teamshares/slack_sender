@@ -26,13 +26,13 @@ module SlackSender
           # Configure Sidekiq-specific retry logic
           if defined?(Sidekiq::Job) && respond_to?(:sidekiq_retry_in)
             sidekiq_retry_in do |_count, exception|
-              SlackSender::Util.parse_retry_delay_from_slack_exception(exception)
+              SlackSender::Util.parse_retry_delay_from_exception(exception)
             end
           end
         when :active_job
           async :active_job do
             retry_on StandardError, wait: :exponentially_longer, attempts: 5 do |_job, exception|
-              retry_behavior = SlackSender::Util.parse_retry_delay_from_slack_exception(exception)
+              retry_behavior = SlackSender::Util.parse_retry_delay_from_exception(exception)
               next if retry_behavior == :discard
 
               # If retry_behavior is a number (seconds), schedule retry with that delay

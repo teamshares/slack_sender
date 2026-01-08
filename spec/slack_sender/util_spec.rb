@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 RSpec.describe SlackSender::Util do
-  describe ".parse_retry_delay_from_slack_exception" do
-    subject(:result) { described_class.parse_retry_delay_from_slack_exception(exception) }
+  describe ".parse_retry_delay_from_exception" do
+    subject(:result) { described_class.parse_retry_delay_from_exception(exception) }
 
     context "with NotInChannel exception" do
       let(:exception) { Slack::Web::Api::Errors::NotInChannel.new("not_in_channel") }
