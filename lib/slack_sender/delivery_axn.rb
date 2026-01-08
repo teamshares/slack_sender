@@ -44,7 +44,7 @@ module SlackSender
     def call
       files.present? ? upload_files : post_message
     rescue Slack::Web::Api::Errors::IsArchived => e
-      raise(e) unless SlackSender.config.ignore_archived_errors
+      raise(e) unless SlackSender.config.silence_archived_channel_exceptions
 
       done! "Failed successfully: ignoring 'is archived' error per config"
     end

@@ -298,7 +298,7 @@ SlackSender automatically handles common Slack API errors:
 
 - **Not In Channel**: Sends error notification to `error_channel` (if configured), otherwise logs warning
 - **Channel Not Found**: Sends error notification to `error_channel` (if configured), otherwise logs warning
-- **Channel Is Archived**: Sends error notification to `error_channel` (if configured and `ignore_archived_errors` is false/nil), otherwise logs warning. Can be ignored via `config.ignore_archived_errors = true`
+- **Channel Is Archived**: Sends error notification to `error_channel` (if configured and `silence_archived_channel_exceptions` is false/nil), otherwise logs warning. Can be ignored via `config.silence_archived_channel_exceptions = true`
 - **Rate Limits**: Automatically retries with delay from `Retry-After` header
 - **Other Errors**: Authentication and authorization errors (invalid_auth, token_revoked, missing_scope, etc.) log warnings but don't attempt Slack delivery (since they would fail)
 

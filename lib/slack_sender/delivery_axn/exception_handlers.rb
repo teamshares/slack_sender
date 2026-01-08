@@ -20,7 +20,7 @@ module SlackSender
           )
         end
 
-        # Only reaches here if ignore_archived_errors is false/nil
+        # Only reaches here if silence_archived_channel_exceptions is false/nil
         # (if true, it's handled in call method with done!)
         base.on_exception(if: ::Slack::Web::Api::Errors::IsArchived) do |exception:|
           report_exception_to_slack_error_channel(

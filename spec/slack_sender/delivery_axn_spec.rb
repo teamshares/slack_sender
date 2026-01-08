@@ -404,9 +404,9 @@ RSpec.describe SlackSender::DeliveryAxn do
           )
         end
 
-        context "when config.ignore_archived_errors is false" do
+        context "when config.silence_archived_channel_exceptions is false" do
           before do
-            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(false)
+            allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(false)
             call_count = 0
             allow(client_dbl).to receive(:chat_postMessage) do |args|
               call_count += 1
@@ -421,9 +421,9 @@ RSpec.describe SlackSender::DeliveryAxn do
           end
         end
 
-        context "when config.ignore_archived_errors is true" do
+        context "when config.silence_archived_channel_exceptions is true" do
           before do
-            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(true)
+            allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(true)
           end
 
           it "succeeds with done message" do
@@ -539,9 +539,9 @@ RSpec.describe SlackSender::DeliveryAxn do
       context "when IsArchived error occurs" do
         subject(:result) { action_class.call!(profile:, channel:, text:) }
 
-        context "when config.ignore_archived_errors is false" do
+        context "when config.silence_archived_channel_exceptions is false" do
           before do
-            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(false)
+            allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(false)
             call_count = 0
             allow(client_dbl).to receive(:chat_postMessage) do |args|
               call_count += 1
@@ -558,9 +558,9 @@ RSpec.describe SlackSender::DeliveryAxn do
           end
         end
 
-        context "when config.ignore_archived_errors is true" do
+        context "when config.silence_archived_channel_exceptions is true" do
           before do
-            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(true)
+            allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(true)
             allow(client_dbl).to receive(:chat_postMessage).and_raise(
               Slack::Web::Api::Errors::IsArchived.new("is_archived"),
             )
@@ -573,9 +573,9 @@ RSpec.describe SlackSender::DeliveryAxn do
           end
         end
 
-        context "when config.ignore_archived_errors is nil" do
+        context "when config.silence_archived_channel_exceptions is nil" do
           before do
-            allow(SlackSender.config).to receive(:ignore_archived_errors).and_return(nil)
+            allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(nil)
             call_count = 0
             allow(client_dbl).to receive(:chat_postMessage) do |args|
               call_count += 1

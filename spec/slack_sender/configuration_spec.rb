@@ -14,14 +14,14 @@ RSpec.describe SlackSender::Configuration do
     end
   end
 
-  describe "#ignore_archived_errors" do
+  describe "#silence_archived_channel_exceptions" do
     it "defaults to nil" do
-      expect(config.ignore_archived_errors).to be_nil
+      expect(config.silence_archived_channel_exceptions).to be_nil
     end
 
     it "can be set" do
-      config.ignore_archived_errors = true
-      expect(config.ignore_archived_errors).to be true
+      config.silence_archived_channel_exceptions = true
+      expect(config.silence_archived_channel_exceptions).to be true
     end
   end
 
