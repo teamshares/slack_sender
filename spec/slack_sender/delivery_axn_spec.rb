@@ -485,7 +485,6 @@ RSpec.describe SlackSender::DeliveryAxn do
             dev_channel: "C01H3KU3B9P",
             error_channel: nil,
             channels: { slack_development: "C01H3KU3B9P" },
-            user_groups: {},
           )
         end
         subject(:result) { action_class.call!(profile: profile_without_error_channel, channel:, text:) }

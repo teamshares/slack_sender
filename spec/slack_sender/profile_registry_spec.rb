@@ -9,9 +9,7 @@ RSpec.describe SlackSender::ProfileRegistry do
     it "registers a profile with the given name" do
       profile = described_class.register(:test_profile,
                                          token: "TEST_TOKEN",
-                                         dev_channel: "C123",
-                                         channels: {},
-                                         user_groups: {})
+                                         dev_channel: "C123")
 
       expect(profile).to be_a(SlackSender::Profile)
       expect(described_class.find(:test_profile)).to eq(profile)
@@ -19,26 +17,28 @@ RSpec.describe SlackSender::ProfileRegistry do
 
     it "allows dev_channel to be nil" do
       profile = described_class.register(:test_profile,
-                                         token: "TEST_TOKEN",
-                                         channels: {},
-                                         user_groups: {})
+                                         token: "TEST_TOKEN")
 
       expect(profile.dev_channel).to be_nil
+    end
+
+    it "defaults channels and user_groups to empty hashes" do
+      profile = described_class.register(:test_profile,
+                                         token: "TEST_TOKEN")
+
+      expect(profile.channels).to eq({})
+      expect(profile.user_groups).to eq({})
     end
 
     it "raises error if profile already exists" do
       described_class.register(:test_profile,
                                token: "TEST_TOKEN",
-                               dev_channel: "C123",
-                               channels: {},
-                               user_groups: {})
+                               dev_channel: "C123")
 
       expect do
         described_class.register(:test_profile,
                                  token: "OTHER_TOKEN",
-                                 dev_channel: "C456",
-                                 channels: {},
-                                 user_groups: {})
+                                 dev_channel: "C456")
       end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
     end
   end
@@ -47,9 +47,7 @@ RSpec.describe SlackSender::ProfileRegistry do
     before do
       described_class.register(:test_profile,
                                token: "TEST_TOKEN",
-                               dev_channel: "C123",
-                               channels: {},
-                               user_groups: {})
+                               dev_channel: "C123")
     end
 
     it "finds a registered profile" do
@@ -81,9 +79,7 @@ RSpec.describe SlackSender::ProfileRegistry do
     before do
       described_class.register(:test_profile,
                                token: "TEST_TOKEN",
-                               dev_channel: "C123",
-                               channels: {},
-                               user_groups: {})
+                               dev_channel: "C123")
     end
 
     it "clears all registered profiles" do

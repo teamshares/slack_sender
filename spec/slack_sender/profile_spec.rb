@@ -42,8 +42,6 @@ RSpec.describe SlackSender::Profile do
         }
         profile_with_proc = described_class.new(
           token: token_proc,
-          channels: {},
-          user_groups: {},
         )
 
         expect(profile_with_proc.token).to eq("token-1")
@@ -70,8 +68,6 @@ RSpec.describe SlackSender::Profile do
         described_class.new(
           token: "SLACK_API_TOKEN",
           dev_channel: nil,
-          channels: {},
-          user_groups: {},
         )
       end
 
@@ -87,8 +83,6 @@ RSpec.describe SlackSender::Profile do
         described_class.new(
           token: "SLACK_API_TOKEN",
           dev_channel_redirect_prefix: "Custom prefix: %s",
-          channels: {},
-          user_groups: {},
         )
       end
 
@@ -102,8 +96,6 @@ RSpec.describe SlackSender::Profile do
         described_class.new(
           token: "SLACK_API_TOKEN",
           dev_channel_redirect_prefix: nil,
-          channels: {},
-          user_groups: {},
         )
       end
 
@@ -404,17 +396,13 @@ RSpec.describe SlackSender::Profile do
           SlackSender.register(
             token: "DEFAULT_TOKEN",
             dev_channel: "C_DEFAULT",
-            channels: {},
-            user_groups: {},
           )
         end
 
         let(:other_profile) do
           SlackSender.register(:other_profile,
                                token: "OTHER_TOKEN",
-                               dev_channel: "C_OTHER",
-                               channels: {},
-                               user_groups: {})
+                               dev_channel: "C_OTHER")
         end
 
         before do
@@ -497,8 +485,6 @@ RSpec.describe SlackSender::Profile do
           let(:unregistered_profile) do
             described_class.new(
               token: "UNREG_TOKEN",
-              channels: {},
-              user_groups: {},
             )
           end
 
@@ -633,17 +619,13 @@ RSpec.describe SlackSender::Profile do
           SlackSender.register(
             token: "DEFAULT_TOKEN",
             dev_channel: "C_DEFAULT",
-            channels: {},
-            user_groups: {},
           )
         end
 
         let(:other_profile) do
           SlackSender.register(:other_profile,
                                token: "OTHER_TOKEN",
-                               dev_channel: "C_OTHER",
-                               channels: {},
-                               user_groups: {})
+                               dev_channel: "C_OTHER")
         end
 
         before do
@@ -701,8 +683,6 @@ RSpec.describe SlackSender::Profile do
           let(:unregistered_profile) do
             described_class.new(
               token: "UNREG_TOKEN",
-              channels: {},
-              user_groups: {},
             )
           end
 
@@ -747,7 +727,6 @@ RSpec.describe SlackSender::Profile do
           described_class.new(
             token: "SLACK_API_TOKEN",
             user_groups: { eng_team: "S123ABC" },
-            channels: {},
           )
         end
 
@@ -784,7 +763,6 @@ RSpec.describe SlackSender::Profile do
               eng_team: "S123ABC",
               slack_development: "S_DEV_GROUP",
             },
-            channels: {},
           )
         end
 
@@ -808,7 +786,6 @@ RSpec.describe SlackSender::Profile do
           described_class.new(
             token: "SLACK_API_TOKEN",
             user_groups: { eng_team: "S123ABC" },
-            channels: {},
           )
         end
 
