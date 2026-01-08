@@ -29,14 +29,7 @@ module SlackSender
       end
 
       # Only relevant before we send to the backend -- avoid filling redis with large files
-      if kwargs[:files].present?
-        total_file_size = MultiFileWrapper.new(kwargs[:files]).total_file_size
-        max_size = SlackSender.config.max_background_file_size
-
-        if max_size && total_file_size > max_size
-          raise Error, "Total file size (#{total_file_size} bytes) exceeds configured limit (#{max_size} bytes) for background jobs"
-        end
-      end
+      raise Error, "can't upload files to background job... yet (feature planned post alpha release)" if kwargs[:files].present?
 
       unless ProfileRegistry.all[key] == self
         raise Error,

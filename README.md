@@ -80,9 +80,6 @@ SlackSender.configure do |config|
 
   # Set production mode (affects dev channel redirects)
   config.in_production = Rails.env.production?
-
-  # Limit file size for background jobs (prevents Redis overload)
-  config.max_background_file_size = 10.megabytes
 end
 
 # Exception notifications are handled via Axn's on_exception handler
@@ -352,22 +349,6 @@ When using async delivery, SlackSender automatically:
 - Retries up to 5 times before giving up
 
 Rate limit handling works with both Sidekiq and ActiveJob backends.
-
-## File Size Limits
-
-To prevent large files from overloading your job queue, set a maximum file size:
-
-```ruby
-SlackSender.configure do |config|
-  config.max_background_file_size = 10.megabytes
-end
-
-# This will raise an error if total file size exceeds limit
-SlackSender.call(
-  channel: :alerts,
-  files: [large_file]  # Raises if > 10MB
-)
-```
 
 ## Examples
 

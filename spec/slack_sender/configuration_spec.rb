@@ -25,17 +25,6 @@ RSpec.describe SlackSender::Configuration do
     end
   end
 
-  describe "#max_background_file_size" do
-    it "defaults to nil" do
-      expect(config.max_background_file_size).to be_nil
-    end
-
-    it "can be set to an integer" do
-      config.max_background_file_size = 10_000_000
-      expect(config.max_background_file_size).to eq(10_000_000)
-    end
-  end
-
   describe "#in_production?" do
     context "when @in_production is explicitly set" do
       it "returns true when set to true" do
