@@ -51,8 +51,7 @@ module SlackSender
 
     private
 
-    # TODO: just use memo once we update Axn
-    def client = @client ||= ::Slack::Web::Client.new(slack_client_config.merge(token: profile.token))
+    memo def client = ::Slack::Web::Client.new(slack_client_config.merge(token: profile.token))
 
     # Profile configs
     def slack_client_config = profile.slack_client_config
