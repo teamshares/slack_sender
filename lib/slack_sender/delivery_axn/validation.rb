@@ -5,8 +5,6 @@ module SlackSender
     module Validation
       def self.included(base)
         base.before do
-          possibly_validate_known_channel!
-
           fail! "Must provide at least one of: text, blocks, attachments, or files" if content_blank?
           fail! "Provided blocks were invalid" if blocks.present? && !blocks_valid?
 
@@ -19,13 +17,6 @@ module SlackSender
       end
 
       private
-
-      def possibly_validate_known_channel!
-        return unless validate_known_channel
-
-        # TODO: once Axn supports preprocessing accessing other fields, we can remove this method and use preprocess instead
-        profile.channels[channel.to_sym] || fail!("Unknown channel provided: :#{channel}")
-      end
 
       def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank?
 

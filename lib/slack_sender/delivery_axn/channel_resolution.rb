@@ -5,20 +5,10 @@ module SlackSender
     module ChannelResolution
       protected
 
-      # TODO: just use memo once we update Axn
       def channel_to_use
-        redirect_to_dev_channel? ? dev_channel : resolved_channel
+        redirect_to_dev_channel? ? dev_channel : channel
       end
 
-      def resolved_channel
-        return channel unless validate_known_channel
-
-        # TODO: once Axn supports preprocessing accessing other fields, we can remove this
-        # and just reference channel directly.
-        profile.channels[channel.to_sym]
-      end
-
-      # TODO: just use memo once we update Axn
       def text_to_use
         return text unless redirect_to_dev_channel?
 
@@ -35,8 +25,7 @@ module SlackSender
       def redirect_to_dev_channel? = dev_channel.present? && !SlackSender.config.in_production?
 
       def channel_display
-        ch = resolved_channel
-        is_channel_id?(ch) ? Slack::Messages::Formatting.channel_link(ch) : "`#{ch}`"
+        is_channel_id?(channel) ? Slack::Messages::Formatting.channel_link(channel) : "`#{channel}`"
       end
 
       # TODO: this is directionally correct, but more-correct would involve conversations.list
