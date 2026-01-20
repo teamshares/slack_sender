@@ -4,7 +4,6 @@ require_relative "delivery_axn/async_configuration"
 require_relative "delivery_axn/exception_handlers"
 require_relative "delivery_axn/error_message_parsing"
 require_relative "delivery_axn/validation"
-require_relative "delivery_axn/channel_resolution"
 
 module SlackSender
   class DeliveryAxn
@@ -17,7 +16,6 @@ module SlackSender
     include ExceptionHandlers
     include ErrorMessageParsing
     include Validation
-    include ChannelResolution
 
     expects :profile, type: Profile, preprocess: lambda { |p|
       # If given a string/symbol (profile name), look it up in the registry
@@ -52,6 +50,8 @@ module SlackSender
       done! "Failed successfully: ignoring 'is archived' error per config"
     end
 
+    DEFAULT_DEV_CHANNEL_REDIRECT_PREFIX = ":construction: _This message would have been sent to %s in production_"
+
     private
 
     memo def client = ::Slack::Web::Client.new(slack_client_config.merge(token: profile.token))
@@ -60,6 +60,29 @@ module SlackSender
     def slack_client_config = profile.slack_client_config
     def error_channel = profile.error_channel
     def dev_channel = profile.dev_channel
+
+    # Dev channel redirection
+    memo def channel_to_use = redirect_to_dev_channel? ? dev_channel : channel
+    memo def text_to_use
+      return text unless redirect_to_dev_channel?
+
+      formatted_message = text&.lines&.map { |line| "> #{line}" }&.join
+
+      [
+        dev_channel_redirect_prefix,
+        formatted_message,
+      ].compact_blank.join("\n\n")
+    end
+
+    # Dev channel redirection - helpers
+    def redirect_to_dev_channel? = dev_channel.present? && !SlackSender.config.in_production?
+    def channel_display = is_channel_id?(channel) ? Slack::Messages::Formatting.channel_link(channel) : "`#{channel}`"
+    def dev_channel_redirect_prefix = format(profile.dev_channel_redirect_prefix.presence || DEFAULT_DEV_CHANNEL_REDIRECT_PREFIX, channel_display)
+
+    # TODO: this is directionally correct, but more-correct would involve conversations.list
+    def is_channel_id?(given) # rubocop:disable Naming/PredicatePrefix
+      given[0] != "#" && given.match?(/\A[CGD][A-Z0-9]+\z/)
+    end
 
     # Core sending methods
     def upload_files
