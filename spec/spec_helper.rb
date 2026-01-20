@@ -14,7 +14,7 @@ module SlackErrorHelper
   def self.build(error_class, error_code, response_metadata: nil)
     body = Struct.new(:error, :response_metadata, keyword_init: true).new(
       error: error_code,
-      response_metadata: response_metadata,
+      response_metadata:,
     )
     response = Struct.new(:body, keyword_init: true).new(body:)
     error_class.new(error_code, response)

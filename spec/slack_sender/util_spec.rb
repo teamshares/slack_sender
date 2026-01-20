@@ -5,13 +5,13 @@ RSpec.describe SlackSender::Util do
     subject(:result) { described_class.parse_retry_delay_from_exception(exception) }
 
     context "with NotInChannel exception" do
-      let(:exception) { Slack::Web::Api::Errors::NotInChannel.new("not_in_channel") }
+      let(:exception) { SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel") }
 
       it { is_expected.to eq(:discard) }
     end
 
     context "with ChannelNotFound exception" do
-      let(:exception) { Slack::Web::Api::Errors::ChannelNotFound.new("channel_not_found") }
+      let(:exception) { SlackErrorHelper.build(Slack::Web::Api::Errors::ChannelNotFound, "channel_not_found") }
 
       it { is_expected.to eq(:discard) }
     end

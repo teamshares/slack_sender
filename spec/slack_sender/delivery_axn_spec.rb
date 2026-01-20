@@ -371,7 +371,7 @@ RSpec.describe SlackSender::DeliveryAxn do
         before do
           allow(SlackSender.config).to receive(:in_production?).and_return(true)
           allow(client_dbl).to receive(:files_upload_v2).and_raise(
-            Slack::Web::Api::Errors::IsArchived.new("is_archived"),
+            SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived"),
           )
         end
 
@@ -506,9 +506,10 @@ RSpec.describe SlackSender::DeliveryAxn do
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(false)
             call_count = 0
+            is_archived_error = SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived")
             allow(client_dbl).to receive(:chat_postMessage) do |args|
               call_count += 1
-              raise Slack::Web::Api::Errors::IsArchived, "is_archived" if call_count == 1
+              raise is_archived_error if call_count == 1
 
               expect(args[:channel]).to eq(profile.channels[:eng_alerts])
               expect(args[:text]).to include("Is Archived")
@@ -525,7 +526,7 @@ RSpec.describe SlackSender::DeliveryAxn do
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(true)
             allow(client_dbl).to receive(:chat_postMessage).and_raise(
-              Slack::Web::Api::Errors::IsArchived.new("is_archived"),
+              SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived"),
             )
           end
 
@@ -540,9 +541,10 @@ RSpec.describe SlackSender::DeliveryAxn do
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(nil)
             call_count = 0
+            is_archived_error = SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived")
             allow(client_dbl).to receive(:chat_postMessage) do |args|
               call_count += 1
-              raise Slack::Web::Api::Errors::IsArchived, "is_archived" if call_count == 1
+              raise is_archived_error if call_count == 1
 
               expect(args[:channel]).to eq(profile.channels[:eng_alerts])
               expect(args[:text]).to include("Is Archived")
