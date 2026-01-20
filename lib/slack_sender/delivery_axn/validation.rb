@@ -20,15 +20,9 @@ module SlackSender
 
       def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank?
 
+      # TODO: Add better validations against slack block kit API
       def blocks_valid?
-        return false if blocks.blank?
-
-        return true if blocks.all? do |single_block|
-          # TODO: Add better validations against slack block kit API
-          single_block.is_a?(Hash) && (single_block.key?(:type) || single_block.key?("type"))
-        end
-
-        false
+        blocks.all? { |block| block.is_a?(Hash) && (block.key?(:type) || block.key?("type")) }
       end
     end
   end

@@ -13,13 +13,7 @@ module SlackSender
         # No backend configured - will raise error when deliver is called
         return unless backend
 
-        unless SlackSender::Configuration::SUPPORTED_ASYNC_BACKENDS.include?(backend)
-          raise ArgumentError,
-                "Unsupported async backend: #{backend.inspect}. " \
-                "Supported backends: #{SlackSender::Configuration::SUPPORTED_ASYNC_BACKENDS.inspect}. " \
-                "Please update SlackSender to support this backend."
-        end
-
+        # Backend is already validated by Configuration#async_backend=
         case backend
         when :sidekiq
           async :sidekiq, retry: 5, dead: false

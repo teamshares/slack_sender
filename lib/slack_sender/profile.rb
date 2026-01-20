@@ -118,16 +118,15 @@ module SlackSender
     def preprocess_blocks_and_attachments!(kwargs)
       # Convert symbol keys to strings in blocks and attachments for JSON serialization
       # This ensures they're serializable for async jobs (Sidekiq/ActiveJob)
-      if kwargs[:blocks].present?
-        kwargs[:blocks] = deep_stringify_keys(kwargs[:blocks])
-      else
-        kwargs.delete(:blocks)
-      end
+      stringify_or_delete!(kwargs, :blocks)
+      stringify_or_delete!(kwargs, :attachments)
+    end
 
-      if kwargs[:attachments].present?
-        kwargs[:attachments] = deep_stringify_keys(kwargs[:attachments])
+    def stringify_or_delete!(kwargs, key)
+      if kwargs[key].present?
+        kwargs[key] = deep_stringify_keys(kwargs[key])
       else
-        kwargs.delete(:attachments)
+        kwargs.delete(key)
       end
     end
 

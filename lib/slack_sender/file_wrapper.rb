@@ -4,6 +4,20 @@ module SlackSender
   class FileWrapper
     attr_reader :index
 
+    def self.active_storage_attachment?(obj)
+      defined?(ActiveStorage::Attachment) && obj.is_a?(ActiveStorage::Attachment)
+    end
+
+    def self.file_like?(obj)
+      return false if obj.nil?
+
+      obj.is_a?(StringIO) ||
+        obj.is_a?(File) ||
+        obj.is_a?(Tempfile) ||
+        active_storage_attachment?(obj) ||
+        (obj.respond_to?(:read) && (obj.respond_to?(:original_filename) || obj.respond_to?(:path)))
+    end
+
     def self.wrap(file, index)
       # If it's already a FileWrapper, return it as-is
       return file if file.instance_of?(self)
@@ -51,10 +65,7 @@ module SlackSender
     def read_content(file)
       if active_storage_attachment?(file)
         file.download
-      elsif stringio?(file)
-        file.rewind
-        file.read
-      elsif file.is_a?(File) || file.is_a?(Tempfile)
+      elsif file.is_a?(StringIO) || file.is_a?(File) || file.is_a?(Tempfile)
         file.rewind if file.respond_to?(:rewind)
         file.read
       elsif file.respond_to?(:read)
@@ -69,11 +80,7 @@ module SlackSender
     end
 
     def active_storage_attachment?(file)
-      defined?(ActiveStorage::Attachment) && file.is_a?(ActiveStorage::Attachment)
-    end
-
-    def stringio?(file)
-      file.is_a?(StringIO)
+      self.class.active_storage_attachment?(file)
     end
   end
 end

@@ -76,11 +76,11 @@ module SlackSender
 
     # Dev channel redirection - helpers
     def redirect_to_dev_channel? = dev_channel.present? && !SlackSender.config.in_production?
-    def channel_display = is_channel_id?(channel) ? Slack::Messages::Formatting.channel_link(channel) : "`#{channel}`"
+    def channel_display = channel_id?(channel) ? Slack::Messages::Formatting.channel_link(channel) : "`#{channel}`"
     def dev_channel_redirect_prefix = format(profile.dev_channel_redirect_prefix.presence || DEFAULT_DEV_CHANNEL_REDIRECT_PREFIX, channel_display)
 
     # TODO: this is directionally correct, but more-correct would involve conversations.list
-    def is_channel_id?(given) # rubocop:disable Naming/PredicatePrefix
+    def channel_id?(given)
       given[0] != "#" && given.match?(/\A[CGD][A-Z0-9]+\z/)
     end
 
@@ -107,11 +107,11 @@ module SlackSender
       params = {
         channel: channel_to_use,
         text: text_to_use,
-      }
-      params[:blocks] = blocks if blocks.present?
-      params[:attachments] = attachments if attachments.present?
-      params[:icon_emoji] = icon_emoji if icon_emoji.present?
-      params[:thread_ts] = thread_ts if thread_ts.present?
+        blocks:,
+        attachments:,
+        icon_emoji:,
+        thread_ts:,
+      }.compact_blank
 
       response = client.chat_postMessage(**params)
       expose thread_ts: response["ts"]

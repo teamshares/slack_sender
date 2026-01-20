@@ -33,10 +33,7 @@ module SlackSender
         # Catch-all for other SlackError exceptions (auth failures, etc.)
         # These can't send to error_channel, so just log warnings
         base.on_exception(:log_warning_from_exception, if: lambda { |e|
-          e.is_a?(::Slack::Web::Api::Errors::SlackError) &&
-          !e.is_a?(::Slack::Web::Api::Errors::NotInChannel) &&
-          !e.is_a?(::Slack::Web::Api::Errors::ChannelNotFound) &&
-          !e.is_a?(::Slack::Web::Api::Errors::IsArchived)
+          e.is_a?(::Slack::Web::Api::Errors::SlackError) && !SlackSender::Util.non_retryable_channel_error?(e)
         })
       end
 
