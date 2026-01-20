@@ -452,7 +452,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "does not attempt recursive error notification" do
           allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            Slack::Web::Api::Errors::NotInChannel.new("not_in_channel"),
+            SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel"),
           )
 
           # Should only be called once (the original message, not error notification)
@@ -468,7 +468,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         before do
           allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            Slack::Web::Api::Errors::NotInChannel.new("not_in_channel"),
+            SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel"),
           )
         end
 
@@ -486,7 +486,7 @@ RSpec.describe SlackSender::DeliveryAxn do
           call_count = 0
           allow(client_dbl).to receive(:chat_postMessage) do
             call_count += 1
-            raise Slack::Web::Api::Errors::NotInChannel, "not_in_channel" if call_count == 1
+            raise SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel") if call_count == 1
 
             raise StandardError, "error channel also failed"
           end
