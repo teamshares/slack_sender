@@ -51,7 +51,7 @@ module SlackSender
     private
 
     def detect_filename(file)
-      if active_storage_attachment?(file)
+      if self.class.active_storage_attachment?(file)
         file.filename.to_s.presence || file.blob&.filename.to_s.presence
       elsif file.respond_to?(:original_filename) && file.original_filename.present?
         file.original_filename
@@ -63,7 +63,7 @@ module SlackSender
     end
 
     def read_content(file)
-      if active_storage_attachment?(file)
+      if self.class.active_storage_attachment?(file)
         file.download
       elsif file.is_a?(StringIO) || file.is_a?(File) || file.is_a?(Tempfile)
         file.rewind if file.respond_to?(:rewind)
@@ -77,10 +77,6 @@ module SlackSender
       else
         raise ArgumentError, "File object does not support reading: #{file.class}"
       end
-    end
-
-    def active_storage_attachment?(file)
-      self.class.active_storage_attachment?(file)
     end
   end
 end

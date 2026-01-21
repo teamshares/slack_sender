@@ -5,13 +5,13 @@ module SlackSender
     module Validation
       def self.included(base)
         base.before do
-          fail! "Must provide at least one of: text, blocks, attachments, or files" if content_blank?
-          fail! "Provided blocks were invalid" if blocks.present? && !blocks_valid?
+          fail! ErrorMessages::NO_CONTENT_PROVIDED if content_blank?
+          fail! ErrorMessages::INVALID_BLOCKS if blocks.present? && !blocks_valid?
 
           if files.present?
-            fail! "Cannot provide files with blocks" if blocks.present?
-            fail! "Cannot provide files with attachments" if attachments.present?
-            fail! "Cannot provide files with icon_emoji" if icon_emoji.present?
+            fail! ErrorMessages::FILES_WITH_BLOCKS if blocks.present?
+            fail! ErrorMessages::FILES_WITH_ATTACHMENTS if attachments.present?
+            fail! ErrorMessages::FILES_WITH_ICON_EMOJI if icon_emoji.present?
           end
         end
       end

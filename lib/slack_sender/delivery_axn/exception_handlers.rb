@@ -40,14 +40,17 @@ module SlackSender
       private
 
       def log_warning_from_exception(exception:, prefix: "SLACK API ERROR: ")
-        msg = [
+        msg = format_warning_message(exception, prefix, profile, channel_display, text)
+        self.class.warn(msg)
+      end
+
+      def format_warning_message(exception, prefix, profile, channel_display, text)
+        [
           "** #{prefix}#{exception.class.name.demodulize.titleize} **.\n",
           (profile.key == :default ? nil : "Profile: #{profile.key}\n"),
           "Channel: #{channel_display}\n",
           "Message: #{text.presence || "(blocks/attachments only)"}",
         ].compact_blank.join
-
-        self.class.warn(msg)
       end
 
       # NOTE: only the three special cases will report via Slack... nice user facing feature if channel wrong but
@@ -55,12 +58,7 @@ module SlackSender
       def report_exception_to_slack_error_channel(exception:, description: nil, cta: nil)
         return log_warning_from_exception(exception:, prefix: "SLACK MESSAGE SEND FAILED: ") if error_channel.blank? || channel == error_channel
 
-        message = [
-          "*Slack Error: #{exception.class.name.demodulize.titleize}*\n",
-          "#{["Attempted to send message to #{channel_display}", description].compact_blank.join(", but ")}\n",
-          cta,
-          "\n_Original message:_ \n> #{text.presence || "(blocks/attachments only)"}",
-        ].compact_blank.join("\n")
+        message = format_error_channel_message(exception, channel_display, description, cta, text)
 
         # Send directly, don't use call_async to avoid Sidekiq queue
         # Use the client directly to bypass channel resolution and ensure we send to error_channel
@@ -69,6 +67,15 @@ module SlackSender
         rescue StandardError => e
           log_warning_from_exception(exception: e, prefix: "SLACK MESSAGE SEND FAILED (WHILE REPORTING ERROR: #{exception.class.name}")
         end
+      end
+
+      def format_error_channel_message(exception, channel_display, description, cta, text)
+        [
+          "*Slack Error: #{exception.class.name.demodulize.titleize}*\n",
+          "#{["Attempted to send message to #{channel_display}", description].compact_blank.join(", but ")}\n",
+          cta,
+          "\n_Original message:_ \n> #{text.presence || "(blocks/attachments only)"}",
+        ].compact_blank.join("\n")
       end
     end
   end

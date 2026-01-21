@@ -25,13 +25,13 @@ module SlackSender
     expects :validate_known_channel, type: :boolean, default: false
     expects :channel, type: String, preprocess: lambda { |ch|
       # NOTE: symbols are preprocessed to strings in Profile#preprocess_call_kwargs
-      validate_known_channel ? (profile.channels[ch.to_sym] || fail!("Unknown channel provided: :#{ch}")) : ch
+      validate_known_channel ? (profile.channels[ch.to_sym] || fail!(format(ErrorMessages::UNKNOWN_CHANNEL, ch))) : ch
     }
     expects :text, type: String, optional: true, preprocess: lambda { |txt|
       ::Slack::Messages::Formatting.markdown(txt) if txt.present?
     }
     expects :icon_emoji, type: String, optional: true, preprocess: lambda { |raw|
-      ":#{raw}:".squeeze(":") if raw.present?
+      normalize_icon_emoji(raw)
     }
     expects :blocks, type: Array, optional: true
     expects :attachments, type: Array, optional: true
@@ -47,12 +47,14 @@ module SlackSender
     rescue Slack::Web::Api::Errors::IsArchived => e
       raise(e) unless SlackSender.config.silence_archived_channel_exceptions
 
-      done! "Failed successfully: ignoring 'is archived' error per config"
+      done! ErrorMessages::ARCHIVED_CHANNEL_SILENCED
     end
 
-    DEFAULT_DEV_CHANNEL_REDIRECT_PREFIX = ":construction: _This message would have been sent to %s in production_"
-
     private
+
+    def normalize_icon_emoji(raw)
+      ":#{raw}:".squeeze(":") if raw.present?
+    end
 
     memo def client = ::Slack::Web::Client.new(slack_client_config.merge(token: profile.token))
 
@@ -77,7 +79,11 @@ module SlackSender
     # Dev channel redirection - helpers
     def redirect_to_dev_channel? = dev_channel.present? && !SlackSender.config.in_production?
     def channel_display = channel_id?(channel) ? Slack::Messages::Formatting.channel_link(channel) : "`#{channel}`"
-    def dev_channel_redirect_prefix = format(profile.dev_channel_redirect_prefix.presence || DEFAULT_DEV_CHANNEL_REDIRECT_PREFIX, channel_display)
+
+    def dev_channel_redirect_prefix
+      format(profile.dev_channel_redirect_prefix.presence || ErrorMessages::DEFAULT_DEV_CHANNEL_REDIRECT_PREFIX,
+             channel_display)
+    end
 
     # TODO: this is directionally correct, but more-correct would involve conversations.list
     def channel_id?(given)

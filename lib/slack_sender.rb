@@ -18,6 +18,7 @@ require "axn"
 require_relative "slack_sender/version"
 require_relative "slack_sender/configuration"
 require_relative "slack_sender/util"
+require_relative "slack_sender/error_messages"
 
 module SlackSender
   class Error < StandardError; end
