@@ -320,18 +320,10 @@ RSpec.describe SlackSender::Profile do
       end
 
       context "with profile parameter" do
-        let(:default_profile) do
-          SlackSender.register(
-            token: "DEFAULT_TOKEN",
-            dev_channel: "C_DEFAULT",
-          )
-        end
-
-        let(:other_profile) do
-          SlackSender.register(:other_profile,
-                               token: "OTHER_TOKEN",
-                               dev_channel: "C_OTHER")
-        end
+        let(:default_profile_attrs) { { token: "DEFAULT_TOKEN", dev_channel: "C_DEFAULT" } }
+        let(:other_profile_attrs) { { token: "OTHER_TOKEN", dev_channel: "C_OTHER" } }
+        let(:default_profile) { SlackSender.register(**default_profile_attrs) }
+        let(:other_profile) { SlackSender.register(:other_profile, **other_profile_attrs) }
 
         before do
           SlackSender::ProfileRegistry.clear!
@@ -409,7 +401,8 @@ RSpec.describe SlackSender::Profile do
         end
 
         context "when called on unregistered profile" do
-          let(:unregistered_profile) { build(:profile, key: :unregistered_profile, token: "UNREG_TOKEN") }
+          let(:unregistered_profile_attrs) { { key: :unregistered_profile, token: "UNREG_TOKEN" } }
+          let(:unregistered_profile) { build(:profile, **unregistered_profile_attrs) }
 
           it "raises an error when profile parameter is specified" do
             expect do
@@ -528,18 +521,10 @@ RSpec.describe SlackSender::Profile do
       end
 
       context "with profile parameter" do
-        let(:default_profile) do
-          SlackSender.register(
-            token: "DEFAULT_TOKEN",
-            dev_channel: "C_DEFAULT",
-          )
-        end
-
-        let(:other_profile) do
-          SlackSender.register(:other_profile,
-                               token: "OTHER_TOKEN",
-                               dev_channel: "C_OTHER")
-        end
+        let(:default_profile_attrs) { { token: "DEFAULT_TOKEN", dev_channel: "C_DEFAULT" } }
+        let(:other_profile_attrs) { { token: "OTHER_TOKEN", dev_channel: "C_OTHER" } }
+        let(:default_profile) { SlackSender.register(**default_profile_attrs) }
+        let(:other_profile) { SlackSender.register(:other_profile, **other_profile_attrs) }
 
         before do
           SlackSender::ProfileRegistry.clear!
@@ -592,7 +577,8 @@ RSpec.describe SlackSender::Profile do
         end
 
         context "when called on unregistered profile" do
-          let(:unregistered_profile) { build(:profile, key: :unregistered_profile, token: "UNREG_TOKEN") }
+          let(:unregistered_profile_attrs) { { key: :unregistered_profile, token: "UNREG_TOKEN" } }
+          let(:unregistered_profile) { build(:profile, **unregistered_profile_attrs) }
 
           it "raises an error when profile parameter is specified" do
             expect do

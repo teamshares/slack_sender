@@ -18,9 +18,8 @@ module SlackSender
     end
 
     def call(**)
-      return false unless SlackSender.config.enabled
-
-      kwargs = preprocess_call_kwargs(**)
+      enabled, kwargs = enabled_and_preprocessed_kwargs(**)
+      return false unless enabled
 
       # Validate async backend is configured and available
       unless SlackSender.config.async_backend_available?
@@ -43,9 +42,9 @@ module SlackSender
     end
 
     def call!(**)
-      return false unless SlackSender.config.enabled
+      enabled, kwargs = enabled_and_preprocessed_kwargs(**)
+      return false unless enabled
 
-      kwargs = preprocess_call_kwargs(**)
       DeliveryAxn.call!(profile: self, **kwargs).thread_ts
     end
 
@@ -62,10 +61,18 @@ module SlackSender
     end
 
     def token
-      @profile_token ||= @token.respond_to?(:call) ? @token.call : @token
+      return @token unless @token.respond_to?(:call)
+
+      @memoized_token ||= @token.call
     end
 
     private
+
+    def enabled_and_preprocessed_kwargs(**)
+      return [false, nil] unless SlackSender.config.enabled
+
+      [true, preprocess_call_kwargs(**)]
+    end
 
     def preprocess_call_kwargs(raw)
       raw.dup.tap do |kwargs|
@@ -78,31 +85,46 @@ module SlackSender
     def validate_and_handle_profile_parameter!(kwargs)
       return unless kwargs.key?(:profile)
 
-      is_registered = ProfileRegistry.all[key] == self
-      registered_name_sym = is_registered ? key.to_sym : nil
-      requested_profile = kwargs[:profile]
+      registered_name_sym = registered_profile_name
+      requested_profile_sym = kwargs[:profile].to_sym
 
-      # Normalize for comparison (handle both symbol and string)
-      requested_profile_sym = requested_profile.to_sym
-
-      if registered_name_sym == :default
-        # Default profile: allow profile parameter to override (keep it in kwargs, convert to string for consistency)
-        # This enables SlackSender.call(profile: :foo) to work
-        kwargs[:profile] = requested_profile_sym.to_s
-      elsif registered_name_sym.nil?
-        # Unregistered profile: still validate to prevent confusion
-        raise ArgumentError,
-              "Cannot specify profile: :#{requested_profile_sym} when calling on unregistered profile. " \
-              "Register the profile first with SlackSender.register(name, config)"
-      elsif registered_name_sym == requested_profile_sym
-        # Non-default profile with matching profile parameter: strip it out (redundant)
-        kwargs.delete(:profile)
+      case registered_name_sym
+      when :default
+        handle_default_profile_parameter!(kwargs, requested_profile_sym)
+      when nil
+        handle_unregistered_profile_parameter!(kwargs, requested_profile_sym)
       else
-        # Non-default profile with non-matching profile parameter: raise error
-        raise ArgumentError,
-              "Cannot specify profile: :#{requested_profile_sym} when calling on profile :#{registered_name_sym}. " \
-              "Use SlackSender.profile(:#{requested_profile_sym}).call(...) instead"
+        if registered_name_sym == requested_profile_sym
+          handle_matching_profile_parameter!(kwargs)
+        else
+          handle_mismatched_profile_parameter!(kwargs, requested_profile_sym, registered_name_sym)
+        end
       end
+    end
+
+    def registered_profile_name
+      ProfileRegistry.all[key] == self ? key.to_sym : nil
+    end
+
+    def handle_default_profile_parameter!(kwargs, requested_profile_sym)
+      # Default profile: allow profile parameter to override (keep it in kwargs, convert to string for consistency)
+      # This enables SlackSender.call(profile: :foo) to work
+      kwargs[:profile] = requested_profile_sym.to_s
+    end
+
+    def handle_unregistered_profile_parameter!(_kwargs, requested_profile_sym)
+      # Unregistered profile: still validate to prevent confusion
+      raise ArgumentError, format(ErrorMessages::PROFILE_UNREGISTERED, requested_profile_sym)
+    end
+
+    def handle_matching_profile_parameter!(kwargs)
+      # Non-default profile with matching profile parameter: strip it out (redundant)
+      kwargs.delete(:profile)
+    end
+
+    def handle_mismatched_profile_parameter!(_kwargs, requested_profile_sym, registered_name_sym)
+      # Non-default profile with non-matching profile parameter: raise error
+      raise ArgumentError, format(ErrorMessages::PROFILE_MISMATCH, requested_profile_sym, registered_name_sym, requested_profile_sym)
     end
 
     def preprocess_channel!(kwargs)
@@ -118,16 +140,15 @@ module SlackSender
     def preprocess_blocks_and_attachments!(kwargs)
       # Convert symbol keys to strings in blocks and attachments for JSON serialization
       # This ensures they're serializable for async jobs (Sidekiq/ActiveJob)
-      if kwargs[:blocks].present?
-        kwargs[:blocks] = deep_stringify_keys(kwargs[:blocks])
-      else
-        kwargs.delete(:blocks)
-      end
+      normalize_for_async_serialization!(kwargs, :blocks)
+      normalize_for_async_serialization!(kwargs, :attachments)
+    end
 
-      if kwargs[:attachments].present?
-        kwargs[:attachments] = deep_stringify_keys(kwargs[:attachments])
+    def normalize_for_async_serialization!(kwargs, key)
+      if kwargs[key].present?
+        kwargs[key] = deep_stringify_keys(kwargs[key])
       else
-        kwargs.delete(:attachments)
+        kwargs.delete(key)
       end
     end
 

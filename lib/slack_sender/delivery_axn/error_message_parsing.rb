@@ -63,19 +63,12 @@ module SlackSender
       def normalize_response(resp)
         return {} if resp.nil?
 
-        # Handle Faraday::Response objects
-        if resp.respond_to?(:body)
-          body = resp.body
-          return body if body.is_a?(Hash)
-          return {} unless body.respond_to?(:to_h)
+        # Handle Faraday::Response objects by extracting body first
+        body = resp.respond_to?(:body) ? resp.body : resp
+        return body if body.is_a?(Hash)
+        return body.to_h if body.respond_to?(:to_h)
 
-          body.to_h
-        elsif resp.is_a?(Hash)
-          resp
-        else
-          # Try to convert to hash if possible
-          resp.respond_to?(:to_h) ? resp.to_h : {}
-        end
+        {}
       end
     end
   end

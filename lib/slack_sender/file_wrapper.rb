@@ -4,6 +4,20 @@ module SlackSender
   class FileWrapper
     attr_reader :index
 
+    def self.active_storage_attachment?(obj)
+      defined?(ActiveStorage::Attachment) && obj.is_a?(ActiveStorage::Attachment)
+    end
+
+    def self.file_like?(obj)
+      return false if obj.nil?
+
+      obj.is_a?(StringIO) ||
+        obj.is_a?(File) ||
+        obj.is_a?(Tempfile) ||
+        active_storage_attachment?(obj) ||
+        (obj.respond_to?(:read) && (obj.respond_to?(:original_filename) || obj.respond_to?(:path)))
+    end
+
     def self.wrap(file, index)
       # If it's already a FileWrapper, return it as-is
       return file if file.instance_of?(self)
@@ -37,7 +51,7 @@ module SlackSender
     private
 
     def detect_filename(file)
-      if active_storage_attachment?(file)
+      if self.class.active_storage_attachment?(file)
         file.filename.to_s.presence || file.blob&.filename.to_s.presence
       elsif file.respond_to?(:original_filename) && file.original_filename.present?
         file.original_filename
@@ -49,12 +63,9 @@ module SlackSender
     end
 
     def read_content(file)
-      if active_storage_attachment?(file)
+      if self.class.active_storage_attachment?(file)
         file.download
-      elsif stringio?(file)
-        file.rewind
-        file.read
-      elsif file.is_a?(File) || file.is_a?(Tempfile)
+      elsif file.is_a?(StringIO) || file.is_a?(File) || file.is_a?(Tempfile)
         file.rewind if file.respond_to?(:rewind)
         file.read
       elsif file.respond_to?(:read)
@@ -66,14 +77,6 @@ module SlackSender
       else
         raise ArgumentError, "File object does not support reading: #{file.class}"
       end
-    end
-
-    def active_storage_attachment?(file)
-      defined?(ActiveStorage::Attachment) && file.is_a?(ActiveStorage::Attachment)
-    end
-
-    def stringio?(file)
-      file.is_a?(StringIO)
     end
   end
 end
