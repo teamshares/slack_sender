@@ -56,7 +56,7 @@ module SlackSender
       ":#{raw}:".squeeze(":") if raw.present?
     end
 
-    memo def client = ::Slack::Web::Client.new(slack_client_config.merge(token: profile.token))
+    def client = profile.client
 
     # Profile configs
     def slack_client_config = profile.slack_client_config

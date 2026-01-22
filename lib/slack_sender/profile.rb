@@ -60,13 +60,17 @@ module SlackSender
       ::Slack::Messages::Formatting.group_link(group_id)
     end
 
+    def client
+      @client ||= ::Slack::Web::Client.new(slack_client_config.merge(token:))
+    end
+
+    private
+
     def token
       return @token unless @token.respond_to?(:call)
 
       @memoized_token ||= @token.call
     end
-
-    private
 
     def enabled_and_preprocessed_kwargs(**)
       return [false, nil] unless SlackSender.config.enabled
