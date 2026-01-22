@@ -101,7 +101,7 @@ RSpec.describe SlackSender do
                                             dev_channel: "C123")
 
         expect(profile1.dev_channel).to eq(profile2.dev_channel)
-        expect(profile1.token).to eq(profile2.token)
+        expect(profile1.client.token).to eq(profile2.client.token)
       end
     end
 

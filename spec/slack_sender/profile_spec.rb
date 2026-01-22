@@ -3,19 +3,19 @@
 RSpec.describe SlackSender::Profile do
   let(:profile) { build(:profile) }
 
-  describe "#token" do
+  describe "token handling" do
     context "when token is a string" do
-      it "returns the token value" do
-        expect(profile.token).to eq("SLACK_API_TOKEN")
+      it "configures client with the token value" do
+        expect(profile.client.token).to eq("SLACK_API_TOKEN")
       end
     end
 
     context "when token is a callable" do
       let(:profile) { build(:profile, token: -> { ENV.fetch("SLACK_API_TOKEN") }) }
 
-      it "calls the callable and returns the result" do
+      it "calls the callable and configures client with the result" do
         allow(ENV).to receive(:fetch).with("SLACK_API_TOKEN").and_return("xoxb-lazy-token")
-        expect(profile.token).to eq("xoxb-lazy-token")
+        expect(profile.client.token).to eq("xoxb-lazy-token")
       end
 
       it "memoizes the result and only evaluates the callable once" do
@@ -26,14 +26,14 @@ RSpec.describe SlackSender::Profile do
         }
         profile_with_proc = build(:profile, token: token_proc)
 
-        expect(profile_with_proc.token).to eq("token-1")
-        expect(profile_with_proc.token).to eq("token-1")
+        expect(profile_with_proc.client.token).to eq("token-1")
+        expect(profile_with_proc.client.token).to eq("token-1")
         expect(call_count).to eq(1)
       end
 
       it "raises error if callable raises error (e.g., missing ENV var)" do
         allow(ENV).to receive(:fetch).with("SLACK_API_TOKEN").and_raise(KeyError.new("key not found: \"SLACK_API_TOKEN\""))
-        expect { profile.token }.to raise_error(KeyError, /SLACK_API_TOKEN/)
+        expect { profile.client }.to raise_error(KeyError, /SLACK_API_TOKEN/)
       end
     end
   end
@@ -604,6 +604,25 @@ RSpec.describe SlackSender::Profile do
 
       it "returns false" do
         expect(profile.call!(channel: "C123", text: "test")).to be false
+      end
+    end
+  end
+
+  describe "#client" do
+    it "returns a Slack::Web::Client instance" do
+      expect(profile.client).to be_a(Slack::Web::Client)
+    end
+
+    it "memoizes the client instance" do
+      expect(profile.client).to be(profile.client)
+    end
+
+    context "with slack_client_config" do
+      let(:profile) { build(:profile, slack_client_config: { timeout: 30, open_timeout: 10 }) }
+
+      it "merges slack_client_config into client" do
+        expect(profile.client.timeout).to eq(30)
+        expect(profile.client.open_timeout).to eq(10)
       end
     end
   end
