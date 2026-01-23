@@ -30,6 +30,9 @@ module SlackSender
     class_attribute :_notify_via_configs, default: []
 
     class << self
+      # Valid keys for notify_via
+      VALID_KEYS = %i[channel if unless text profile blocks attachments icon_emoji thread_ts files].freeze
+
       # Declare a notification to send.
       #
       # @param channel [Symbol, String, Array] Channel(s) to send to. Symbols are resolved as methods.
@@ -37,8 +40,14 @@ module SlackSender
       # @param if [Symbol, Proc] Condition that must be truthy to send
       # @param unless [Symbol, Proc] Condition that must be falsy to send
       # @param kwargs [Hash] Additional SlackSender options (blocks:, attachments:, etc.)
+      # @raise [ArgumentError] If unknown keys are provided
       #
       def notify_via(**kwargs)
+        unknown_keys = kwargs.keys - VALID_KEYS
+        if unknown_keys.any?
+          raise ArgumentError, "Unknown keys for notify_via: #{unknown_keys.map(&:inspect).join(', ')}. Valid keys: #{VALID_KEYS.map(&:inspect).join(', ')}"
+        end
+
         self._notify_via_configs = _notify_via_configs + [kwargs.dup]
       end
     end

@@ -359,4 +359,41 @@ RSpec.describe SlackSender::Notifier do
       expect(notifier_b._notify_via_configs.first[:channel]).to eq(:eng_alerts)
     end
   end
+
+  describe "notify_via validation" do
+    it "raises ArgumentError for unknown keys" do
+      expect {
+        Class.new(described_class) do
+          notify_via channel: :notifications, text: "Test", invalid_key: "value"
+        end
+      }.to raise_error(ArgumentError, /Unknown keys for notify_via: :invalid_key/)
+    end
+
+    it "raises ArgumentError with all unknown keys listed" do
+      expect {
+        Class.new(described_class) do
+          notify_via channel: :notifications, text: "Test", invalid1: "v1", invalid2: "v2"
+        end
+      }.to raise_error(ArgumentError, /Unknown keys for notify_via: :invalid1, :invalid2/)
+    end
+
+    it "accepts all valid keys" do
+      expect {
+        Class.new(described_class) do
+          notify_via(
+            channel: :notifications,
+            text: "Test",
+            if: :condition?,
+            unless: :skip?,
+            profile: :default,
+            blocks: [],
+            attachments: [],
+            icon_emoji: ":rocket:",
+            thread_ts: "123.456",
+            files: [],
+          )
+        end
+      }.not_to raise_error
+    end
+  end
 end
