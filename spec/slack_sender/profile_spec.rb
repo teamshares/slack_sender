@@ -38,6 +38,22 @@ RSpec.describe SlackSender::Profile do
     end
   end
 
+  describe "#default_channel" do
+    context "when default_channel is provided" do
+      let(:profile) { build(:profile, default_channel: :alerts) }
+
+      it "returns the default_channel value" do
+        expect(profile.default_channel).to eq(:alerts)
+      end
+    end
+
+    context "when default_channel is nil" do
+      it "returns nil" do
+        expect(profile.default_channel).to be_nil
+      end
+    end
+  end
+
   describe "#sandbox_channel" do
     context "when sandbox channel is provided" do
       it "returns the sandbox channel value" do
@@ -209,6 +225,62 @@ RSpec.describe SlackSender::Profile do
             text: "test",
           )
           profile.call(channel: "C123", text: "test")
+        end
+      end
+
+      context "with default_channel configured" do
+        let(:profile) { build(:profile, default_channel: :slack_development) }
+
+        before do
+          SlackSender::ProfileRegistry.all[profile.key] = profile
+        end
+
+        context "when no channel is provided" do
+          it "uses the default_channel" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              profile: "test_profile",
+              channel: "slack_development",
+              validate_known_channel: true,
+              text: "test",
+            )
+            profile.call(text: "test")
+          end
+        end
+
+        context "when channel is provided" do
+          it "uses the provided channel instead of default" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              profile: "test_profile",
+              channel: "C999",
+              text: "test",
+            )
+            profile.call(channel: "C999", text: "test")
+          end
+        end
+
+        context "when channel is nil" do
+          it "uses the default_channel" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              profile: "test_profile",
+              channel: "slack_development",
+              validate_known_channel: true,
+              text: "test",
+            )
+            profile.call(channel: nil, text: "test")
+          end
+        end
+
+        context "when default_channel is a string" do
+          let(:profile) { build(:profile, default_channel: "C_DEFAULT") }
+
+          it "uses the default_channel as-is without validation" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              profile: "test_profile",
+              channel: "C_DEFAULT",
+              text: "test",
+            )
+            profile.call(text: "test")
+          end
         end
       end
 
@@ -553,6 +625,33 @@ RSpec.describe SlackSender::Profile do
             text: "test",
           ).and_return(result)
           expect(profile.call!(channel: "C123", text: "test")).to eq("123.456")
+        end
+      end
+
+      context "with default_channel configured" do
+        let(:profile) { build(:profile, default_channel: :slack_development) }
+
+        context "when no channel is provided" do
+          it "uses the default_channel" do
+            expect(SlackSender::DeliveryAxn).to receive(:call!).with(
+              profile:,
+              channel: "slack_development",
+              validate_known_channel: true,
+              text: "test",
+            ).and_return(result)
+            profile.call!(text: "test")
+          end
+        end
+
+        context "when channel is provided" do
+          it "uses the provided channel instead of default" do
+            expect(SlackSender::DeliveryAxn).to receive(:call!).with(
+              profile:,
+              channel: "C999",
+              text: "test",
+            ).and_return(result)
+            profile.call!(channel: "C999", text: "test")
+          end
         end
       end
 

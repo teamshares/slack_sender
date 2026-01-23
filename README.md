@@ -136,6 +136,30 @@ SlackSender.call(channel: :alerts, text: "Alert")
 SlackSender.call(channel: "C1234567890", text: "Alert")
 ```
 
+### Default Channel
+
+Configure a default channel for a profile to avoid passing `channel:` on every call:
+
+```ruby
+SlackSender.register(
+  token: ENV['SLACK_BOT_TOKEN'],
+  default_channel: :alerts,  # Used when no channel is specified
+  channels: {
+    alerts: 'C1111111111',
+    general: 'C2222222222',
+  }
+)
+
+# These are equivalent:
+SlackSender.call(text: "Alert!")                    # Uses default_channel
+SlackSender.call(channel: :alerts, text: "Alert!") # Explicit channel
+
+# Override when needed
+SlackSender.call(channel: :general, text: "Hello") # Uses :general instead
+```
+
+The `default_channel` can be a symbol (resolved from `channels` hash) or a channel ID string.
+
 ### Rich Messages
 
 ```ruby
@@ -484,6 +508,7 @@ end
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `token` | `String` or callable | Required | Slack Bot User OAuth Token. Can be a proc/lambda for dynamic fetching |
+| `default_channel` | `Symbol`, `String`, or `nil` | `nil` | Default channel to use when no channel is specified in `call`/`call!`. Can be a symbol (resolved from `channels` hash) or a channel ID string |
 | `channels` | `Hash` | `{}` | Hash mapping symbol keys to channel IDs (e.g., `{ alerts: 'C123' }`) |
 | `user_groups` | `Hash` | `{}` | Hash mapping symbol keys to user group IDs (e.g., `{ engineers: 'S123' }`) |
 | `slack_client_config` | `Hash` | `{}` | Additional options passed to `Slack::Web::Client` constructor |
