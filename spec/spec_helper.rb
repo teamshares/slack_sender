@@ -6,6 +6,7 @@ require "factory_bot"
 Bundler.require(:default, :development)
 
 require "slack_sender"
+require "axn/testing/spec_helpers"
 
 # Helper for building Slack API errors with properly-formed response objects.
 # The gem's SlackError#error and #response_metadata methods call response.body.*,

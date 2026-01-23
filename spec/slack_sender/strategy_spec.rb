@@ -31,9 +31,7 @@ RSpec.describe SlackSender::Strategy do
 
   describe "strategy usage in an Axn" do
     let(:action_class) do
-      Class.new do
-        include Axn
-
+      build_axn do
         use :slack, channel: :slack_development, profile: :test_profile
 
         expects :message, type: String
@@ -56,9 +54,7 @@ RSpec.describe SlackSender::Strategy do
 
     describe "slack method with channel override" do
       let(:action_class) do
-        Class.new do
-          include Axn
-
+        build_axn do
           use :slack, channel: :slack_development, profile: :test_profile
 
           expects :message, type: String
@@ -80,9 +76,7 @@ RSpec.describe SlackSender::Strategy do
 
     describe "slack method with explicit kwargs" do
       let(:action_class) do
-        Class.new do
-          include Axn
-
+        build_axn do
           use :slack, channel: :slack_development, profile: :test_profile
 
           expects :message, type: String
@@ -104,9 +98,7 @@ RSpec.describe SlackSender::Strategy do
 
     describe "slack method without default channel" do
       let(:action_class) do
-        Class.new do
-          include Axn
-
+        build_axn do
           use :slack, profile: :test_profile
 
           def call
@@ -122,9 +114,7 @@ RSpec.describe SlackSender::Strategy do
 
     describe "slack method in on_success hook" do
       let(:action_class) do
-        Class.new do
-          include Axn
-
+        build_axn do
           use :slack, channel: :slack_development, profile: :test_profile
 
           on_success { slack "Success!" }
@@ -146,9 +136,7 @@ RSpec.describe SlackSender::Strategy do
 
     describe "slack method in on_failure hook" do
       let(:action_class) do
-        Class.new do
-          include Axn
-
+        build_axn do
           use :slack, channel: :slack_development, profile: :test_profile
 
           on_failure { slack "Failed!", channel: :eng_alerts }
@@ -178,9 +166,7 @@ RSpec.describe SlackSender::Strategy do
       end
 
       let(:action_class) do
-        Class.new do
-          include Axn
-
+        build_axn do
           use :slack, channel: :other_channel, profile: :other_profile
 
           def call
@@ -213,9 +199,7 @@ RSpec.describe SlackSender::Strategy do
       end
 
       let(:action_class) do
-        Class.new do
-          include Axn
-
+        build_axn do
           use :slack, channel: :channel_a, profile: :profile_a
 
           def call
@@ -235,9 +219,7 @@ RSpec.describe SlackSender::Strategy do
 
       context "when overriding only the profile but using default channel" do
         let(:action_class) do
-          Class.new do
-            include Axn
-
+          build_axn do
             use :slack, channel: :channel_a, profile: :profile_a
 
             def call
@@ -255,9 +237,7 @@ RSpec.describe SlackSender::Strategy do
 
       context "when using defaults without override" do
         let(:action_class) do
-          Class.new do
-            include Axn
-
+          build_axn do
             use :slack, channel: :channel_a, profile: :profile_a
 
             def call
