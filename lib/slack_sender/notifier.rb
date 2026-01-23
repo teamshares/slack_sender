@@ -71,11 +71,9 @@ module SlackSender
       # Extract channel separately (it may contain static symbols or method refs)
       raw_channel = config.delete(:channel)
 
-      # Resolve remaining values (symbols that match methods become method calls)
-      kwargs = config.transform_values { |v| resolve_value(v) }
-
-      # Resolve channel(s) - only resolve if it's a method on this instance
-      channels = Array(raw_channel).map { |ch| resolve_channel(ch) }
+      # Resolve values (symbols that match methods become method calls)
+      kwargs = config.transform_values { |v| resolve_symbol(v) }
+      channels = Array(raw_channel).map { |ch| resolve_symbol(ch) }
 
       # Handle multi-channel
       channels.each do |ch|
@@ -83,17 +81,10 @@ module SlackSender
       end
     end
 
-    def resolve_value(value)
+    def resolve_symbol(value)
       return value unless value.is_a?(Symbol)
 
       # Only resolve symbols that correspond to defined methods
-      respond_to?(value, true) ? send(value) : value
-    end
-
-    def resolve_channel(value)
-      return value unless value.is_a?(Symbol)
-
-      # Only resolve if it's a method on this instance (not a static channel key)
       respond_to?(value, true) ? send(value) : value
     end
 
