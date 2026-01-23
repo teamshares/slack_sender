@@ -63,3 +63,6 @@ module SlackSender
     def format_group_mention(key) = default_profile.format_group_mention(key)
   end
 end
+
+# Rails integration (if in Rails context)
+require_relative "slack_sender/rails/engine" if defined?(Rails) && Rails.const_defined?(:Engine)
