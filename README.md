@@ -300,6 +300,145 @@ SlackSender.call(
 )
 ```
 
+## Axn Integration
+
+SlackSender provides deep integration with [Axn](https://teamshares.github.io/axn/) for building Slack-enabled actions and dedicated notifier classes.
+
+### Slack Strategy for Axn Actions
+
+Add Slack messaging capabilities to any Axn action using the `:slack` strategy:
+
+```ruby
+class Leads::Close
+  include Axn
+  use :slack, channel: :closing_timelines  # Default channel for all slack() calls
+
+  expects :lead, type: Lead
+
+  on_success { slack ":white_check_mark: #{lead.name} closed successfully!" }
+  on_failure { slack ":x: Failed to close #{lead.name}", channel: :errors }
+
+  def call
+    slack "Processing #{lead.name}..."  # Uses default channel
+    # ... business logic ...
+  end
+end
+```
+
+#### Strategy Configuration
+
+```ruby
+use :slack, channel: :general             # Default channel for all slack() calls
+use :slack, channel: :general, profile: :support  # Use a specific SlackSender profile
+use :slack                                # No default channel (must pass channel: each time)
+```
+
+#### The `slack(...)` Method
+
+The strategy adds a `slack` instance method with flexible calling conventions:
+
+```ruby
+# Positional text argument (sugar for text: kwarg)
+slack "Hello world"
+
+# Override channel
+slack "Hello", channel: :other_channel
+
+# Full kwargs
+slack text: "Hello", channel: :alerts, icon_emoji: "robot"
+
+# With blocks or attachments
+slack channel: :alerts, blocks: [{ type: "section", text: { type: "mrkdwn", text: "*Bold*" } }]
+```
+
+### SlackSender::Notifier Base Class
+
+For actions whose sole purpose is sending Slack notifications, inherit from `SlackSender::Notifier`:
+
+```ruby
+# app/slack_notifiers/closing/loi_signed.rb
+module SlackNotifiers
+  module Closing
+    class LoiSigned < SlackSender::Notifier
+      expects :lead_id, type: Integer
+
+      notify_via channel: :closing_timelines, text: :text, if: :company_status?
+      notify_via channel: :ic_channel, text: :text, if: :company_status?
+
+      def text
+        ":tada: *LOI signed* for #{lead.name} :tada:"
+      end
+
+      private
+
+      def closing_timelines = :closing_timelines  # Static channel symbol
+      def ic_channel = lead.available_slack_channel_id  # Dynamic channel from model
+      def company_status? = lead.company_status?
+      def lead = @lead ||= Lead.find(lead_id)
+    end
+  end
+end
+
+# Call it like any Axn
+SlackNotifiers::Closing::LoiSigned.call(lead_id: 123)
+```
+
+#### The `notify_via` DSL
+
+Declare notifications with conditions and dynamic values:
+
+```ruby
+# Static channel, method for text
+notify_via channel: :notifications, text: :message_text
+
+# Conditional notification
+notify_via channel: :alerts, text: :text, if: :should_notify?
+notify_via channel: :alerts, text: :text, unless: :archived?
+
+# Multi-channel (sends to all)
+notify_via channel: [:channel_a, :channel_b], text: :text
+
+# All values can be symbols (resolved as methods) or static values
+notify_via channel: :dynamic_channel, text: :dynamic_text, attachments: :build_attachments
+```
+
+**Value Resolution:**
+- **Static values**: `channel: :notifications` - passed through directly to SlackSender
+- **Method references**: `text: :message_text` - calls `message_text` method on the instance
+
+**Conditions:**
+- `if: :method_name` - Only send if method returns truthy
+- `if: -> { some_condition }` - Lambda evaluated in instance context
+- `unless: :method_name` - Only send if method returns falsy
+
+#### Notifier Features
+
+Since `SlackSender::Notifier` inherits from Axn, you get:
+- `expects` / `exposes` for input/output contracts
+- Hooks (`before`, `after`, `on_success`, `on_failure`)
+- Automatic logging and error handling
+- Async execution with `call_async`
+
+```ruby
+class SlackNotifiers::DailyReport < SlackSender::Notifier
+  expects :date, type: Date, default: -> { Date.current }
+
+  notify_via channel: :reports, text: :text, attachments: :report_attachments
+
+  def text = "Daily Report for #{date.strftime('%B %d, %Y')}"
+
+  def report_attachments
+    [{ color: "good", text: "All systems operational" }]
+  end
+end
+
+# Sync
+SlackNotifiers::DailyReport.call(date: Date.yesterday)
+
+# Async (via Sidekiq or ActiveJob)
+SlackNotifiers::DailyReport.call_async(date: Date.yesterday)
+```
+
 ## Configuration
 
 ### Global Configuration

@@ -33,6 +33,12 @@ require_relative "slack_sender/profile_registry"
 require_relative "slack_sender/delivery_axn"
 require_relative "slack_sender/file_wrapper"
 require_relative "slack_sender/multi_file_wrapper"
+require_relative "slack_sender/strategy"
+
+# Register the slack strategy with Axn (before loading Notifier which uses it)
+Axn::Strategies.register(:slack, SlackSender::Strategy)
+
+require_relative "slack_sender/notifier"
 
 module SlackSender
   class << self
