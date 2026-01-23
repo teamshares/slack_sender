@@ -362,23 +362,23 @@ RSpec.describe SlackSender::Notifier do
 
   describe "notify_via validation" do
     it "raises ArgumentError for unknown keys" do
-      expect {
+      expect do
         Class.new(described_class) do
           notify_via channel: :notifications, text: "Test", invalid_key: "value"
         end
-      }.to raise_error(ArgumentError, /Unknown keys for notify_via: :invalid_key/)
+      end.to raise_error(ArgumentError, /Unknown keys for notify_via: :invalid_key/)
     end
 
     it "raises ArgumentError with all unknown keys listed" do
-      expect {
+      expect do
         Class.new(described_class) do
           notify_via channel: :notifications, text: "Test", invalid1: "v1", invalid2: "v2"
         end
-      }.to raise_error(ArgumentError, /Unknown keys for notify_via: :invalid1, :invalid2/)
+      end.to raise_error(ArgumentError, /Unknown keys for notify_via: :invalid1, :invalid2/)
     end
 
     it "accepts all valid keys" do
-      expect {
+      expect do
         Class.new(described_class) do
           notify_via(
             channel: :notifications,
@@ -393,7 +393,7 @@ RSpec.describe SlackSender::Notifier do
             files: [],
           )
         end
-      }.not_to raise_error
+      end.not_to raise_error
     end
   end
 end
