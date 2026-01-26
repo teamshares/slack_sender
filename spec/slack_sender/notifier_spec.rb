@@ -26,13 +26,12 @@ RSpec.describe SlackSender::Notifier do
     SlackSender::ProfileRegistry.clear!
   end
 
-  describe "basic notify_via usage" do
+  describe "basic notify usage" do
     let(:notifier_class) do
       Class.new(described_class) do
-        notify_via channel: :notifications, text: :message_text
-
-        def message_text
-          "Hello from notifier!"
+        notify do
+          channel :notifications
+          text { "Hello from notifier!" }
         end
       end
     end
@@ -46,20 +45,19 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "notify_via with expects" do
+  describe "notify with expects" do
     let(:notifier_class) do
       Class.new(described_class) do
         expects :user_name, type: String
 
-        notify_via channel: :notifications, text: :greeting
-
-        def greeting
-          "Hello, #{user_name}!"
+        notify do
+          channel :notifications
+          text { "Hello, #{user_name}!" }
         end
       end
     end
 
-    it "can use expected values in text method" do
+    it "can use expected values in text block" do
       expect(client_dbl).to receive(:chat_postMessage).with(
         hash_including(text: "Hello, Alice!"),
       )
@@ -68,10 +66,13 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "notify_via with static text" do
+  describe "notify with static text" do
     let(:notifier_class) do
       Class.new(described_class) do
-        notify_via channel: :notifications, text: "Static message"
+        notify do
+          channel :notifications
+          text "Static message"
+        end
       end
     end
 
@@ -84,12 +85,38 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "notify_via with dynamic channel" do
+  describe "notify with text as symbol method ref" do
+    let(:notifier_class) do
+      Class.new(described_class) do
+        notify do
+          channel :notifications
+          text :message_text
+        end
+
+        def message_text
+          "From method!"
+        end
+      end
+    end
+
+    it "resolves symbol to method call" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(text: "From method!"),
+      )
+
+      notifier_class.call
+    end
+  end
+
+  describe "notify with dynamic channel" do
     let(:notifier_class) do
       Class.new(described_class) do
         expects :target_channel, type: Symbol
 
-        notify_via channel: :target_channel, text: "Dynamic channel message"
+        notify do
+          channel :target_channel
+          text "Dynamic channel message"
+        end
 
         # target_channel accessor is automatically created by expects
       end
@@ -104,10 +131,13 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "notify_via with multi-channel" do
+  describe "notify with multi-channel via channels DSL" do
     let(:notifier_class) do
       Class.new(described_class) do
-        notify_via channel: %i[notifications eng_alerts], text: "Multi-channel message"
+        notify do
+          channels :notifications, :eng_alerts
+          text "Multi-channel message"
+        end
       end
     end
 
@@ -124,12 +154,16 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "notify_via with if condition (symbol)" do
+  describe "notify with only_if condition (symbol)" do
     let(:notifier_class) do
       Class.new(described_class) do
         expects :should_send, type: :boolean
 
-        notify_via channel: :notifications, text: "Conditional message", if: :should_send?
+        notify do
+          channel :notifications
+          text "Conditional message"
+          only_if :should_send?
+        end
 
         def should_send?
           should_send
@@ -154,18 +188,22 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "notify_via with if condition (lambda)" do
+  describe "notify with only_if condition (block)" do
     let(:notifier_class) do
       Class.new(described_class) do
         expects :count, type: Integer
 
-        notify_via channel: :notifications, text: "Count message", if: -> { count > 5 }
+        notify do
+          channel :notifications
+          text "Count message"
+          only_if { count > 5 }
+        end
 
         # count accessor is automatically created by expects
       end
     end
 
-    context "when lambda returns true" do
+    context "when block returns true" do
       it "sends the message" do
         expect(client_dbl).to receive(:chat_postMessage)
 
@@ -173,7 +211,7 @@ RSpec.describe SlackSender::Notifier do
       end
     end
 
-    context "when lambda returns false" do
+    context "when block returns false" do
       it "does not send the message" do
         expect(client_dbl).not_to receive(:chat_postMessage)
 
@@ -182,41 +220,18 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "notify_via with unless condition" do
+  describe "multiple notify declarations" do
     let(:notifier_class) do
       Class.new(described_class) do
-        expects :archived, type: :boolean
-
-        notify_via channel: :notifications, text: "Not archived message", unless: :archived?
-
-        def archived?
-          archived
+        notify do
+          channel :notifications
+          text "First message"
         end
-      end
-    end
 
-    context "when condition is false" do
-      it "sends the message" do
-        expect(client_dbl).to receive(:chat_postMessage)
-
-        notifier_class.call(archived: false)
-      end
-    end
-
-    context "when condition is true" do
-      it "does not send the message" do
-        expect(client_dbl).not_to receive(:chat_postMessage)
-
-        notifier_class.call(archived: true)
-      end
-    end
-  end
-
-  describe "multiple notify_via declarations" do
-    let(:notifier_class) do
-      Class.new(described_class) do
-        notify_via channel: :notifications, text: "First message"
-        notify_via channel: :eng_alerts, text: "Second message"
+        notify do
+          channel :eng_alerts
+          text "Second message"
+        end
       end
     end
 
@@ -233,20 +248,21 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "multiple notify_via with different conditions" do
+  describe "multiple notify with different conditions" do
     let(:notifier_class) do
       Class.new(described_class) do
         expects :priority, type: Symbol
 
-        notify_via channel: :notifications, text: "Normal priority", if: :normal_priority?
-        notify_via channel: :eng_alerts, text: "High priority!", if: :high_priority?
-
-        def normal_priority?
-          priority == :normal
+        notify do
+          channel :notifications
+          text "Normal priority"
+          only_if { priority == :normal }
         end
 
-        def high_priority?
-          priority == :high
+        notify do
+          channel :eng_alerts
+          text "High priority!"
+          only_if { priority == :high }
         end
       end
     end
@@ -272,10 +288,15 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
-  describe "notify_via with additional kwargs" do
+  describe "notify with additional payload options" do
     let(:notifier_class) do
       Class.new(described_class) do
-        notify_via channel: :notifications, text: :message_text, icon_emoji: :emoji, attachments: :build_attachments
+        notify do
+          channel :notifications
+          text :message_text
+          icon_emoji :emoji
+          attachments :build_attachments
+        end
 
         def message_text
           "Message with extras"
@@ -291,7 +312,7 @@ RSpec.describe SlackSender::Notifier do
       end
     end
 
-    it "passes all kwargs to slack method" do
+    it "passes all options to slack method" do
       expect(client_dbl).to receive(:chat_postMessage).with(
         hash_including(
           text: "Message with extras",
@@ -307,17 +328,23 @@ RSpec.describe SlackSender::Notifier do
   describe "inheritance" do
     let(:base_notifier) do
       Class.new(described_class) do
-        notify_via channel: :notifications, text: "Base message"
+        notify do
+          channel :notifications
+          text "Base message"
+        end
       end
     end
 
     let(:child_notifier) do
       Class.new(base_notifier) do
-        notify_via channel: :eng_alerts, text: "Child message"
+        notify do
+          channel :eng_alerts
+          text "Child message"
+        end
       end
     end
 
-    it "child includes parent notify_via declarations" do
+    it "child includes parent notify declarations" do
       expect(client_dbl).to receive(:chat_postMessage).with(
         hash_including(channel: "C_NOTIFICATIONS", text: "Base message"),
       ).ordered
@@ -341,59 +368,139 @@ RSpec.describe SlackSender::Notifier do
   describe "class attributes isolation" do
     let(:notifier_a) do
       Class.new(described_class) do
-        notify_via channel: :notifications, text: "Notifier A"
+        notify do
+          channel :notifications
+          text "Notifier A"
+        end
       end
     end
 
     let(:notifier_b) do
       Class.new(described_class) do
-        notify_via channel: :eng_alerts, text: "Notifier B"
+        notify do
+          channel :eng_alerts
+          text "Notifier B"
+        end
       end
     end
 
     it "each notifier has its own config" do
-      expect(notifier_a._notify_via_configs.length).to eq(1)
-      expect(notifier_b._notify_via_configs.length).to eq(1)
+      expect(notifier_a._notification_definitions.length).to eq(1)
+      expect(notifier_b._notification_definitions.length).to eq(1)
 
-      expect(notifier_a._notify_via_configs.first[:channel]).to eq(:notifications)
-      expect(notifier_b._notify_via_configs.first[:channel]).to eq(:eng_alerts)
+      # Verify they have different channel configs (checking via execution)
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(channel: "C_NOTIFICATIONS"),
+      )
+      notifier_a.call
+
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(channel: "C03F1DMJ4PM"),
+      )
+      notifier_b.call
     end
   end
 
-  describe "notify_via validation" do
-    it "raises ArgumentError for unknown keys" do
+  describe "notify validation" do
+    it "raises ArgumentError when notify called without block" do
       expect do
         Class.new(described_class) do
-          notify_via channel: :notifications, text: "Test", invalid_key: "value"
+          notify
         end
-      end.to raise_error(ArgumentError, /Unknown keys for notify_via: :invalid_key/)
+      end.to raise_error(ArgumentError, /notify requires a block/)
     end
 
-    it "raises ArgumentError with all unknown keys listed" do
-      expect do
-        Class.new(described_class) do
-          notify_via channel: :notifications, text: "Test", invalid1: "v1", invalid2: "v2"
+    it "raises ArgumentError for missing channel at execution time" do
+      notifier_class = Class.new(described_class) do
+        notify do
+          text "No channel"
         end
-      end.to raise_error(ArgumentError, /Unknown keys for notify_via: :invalid1, :invalid2/)
+      end
+
+      result = notifier_class.call
+      expect(result).not_to be_ok
+      expect(result.exception).to be_a(ArgumentError)
+      expect(result.exception.message).to match(/Missing `channel`/)
     end
 
-    it "accepts all valid keys" do
-      expect do
-        Class.new(described_class) do
-          notify_via(
-            channel: :notifications,
-            text: "Test",
-            if: :condition?,
-            unless: :skip?,
-            profile: :default,
-            blocks: [],
-            attachments: [],
-            icon_emoji: ":rocket:",
-            thread_ts: "123.456",
-            files: [],
-          )
+    it "raises ArgumentError for missing payload at execution time" do
+      notifier_class = Class.new(described_class) do
+        notify do
+          channel :notifications
         end
-      end.not_to raise_error
+      end
+
+      result = notifier_class.call
+      expect(result).not_to be_ok
+      expect(result.exception).to be_a(ArgumentError)
+      expect(result.exception.message).to match(/Missing payload/)
+    end
+  end
+
+  describe "resolution precedence" do
+    describe "block takes precedence" do
+      let(:notifier_class) do
+        Class.new(described_class) do
+          notify do
+            channel :notifications
+            text { "from block" }
+          end
+
+          def text
+            "from method"
+          end
+        end
+      end
+
+      it "uses block value" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(text: "from block"),
+        )
+
+        notifier_class.call
+      end
+    end
+
+    describe "symbol resolves to method if exists" do
+      let(:notifier_class) do
+        Class.new(described_class) do
+          notify do
+            channel :notifications
+            text :custom_text
+          end
+
+          def custom_text
+            "resolved from custom_text method"
+          end
+        end
+      end
+
+      it "calls the method" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(text: "resolved from custom_text method"),
+        )
+
+        notifier_class.call
+      end
+    end
+
+    describe "symbol remains literal if no matching method" do
+      let(:notifier_class) do
+        Class.new(described_class) do
+          notify do
+            channel :notifications  # :notifications is not a method, stays as symbol
+            text "test"
+          end
+        end
+      end
+
+      it "symbol channel is resolved via profile" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(channel: "C_NOTIFICATIONS"),
+        )
+
+        notifier_class.call
+      end
     end
   end
 end

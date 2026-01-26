@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require_relative "notifier/notification_definition"
+require_relative "notifier/notification_dsl"
+
 module SlackSender
   # Base class for Axns whose primary purpose is sending Slack notifications.
   #
@@ -7,92 +10,65 @@ module SlackSender
   #   class MyNotifier < SlackSender::Notifier
   #     expects :user_id, type: Integer
   #
-  #     notify_via channel: :notifications, text: :text, if: :should_notify?
-  #
-  #     def text = "Hello #{user.name}!"
-  #     def should_notify? = user.notifications_enabled?
+  #     notify do
+  #       channel :notifications
+  #       only_if { user.notifications_enabled? }
+  #       text { "Hello #{user.name}!" }
+  #     end
   #
   #     private
   #
   #     def user = @user ||= User.find(user_id)
   #   end
   #
-  # DSL:
-  #   notify_via channel: :foo, text: :text             # static channel, method for text
-  #   notify_via channel: :channel, text: :text, if: :condition  # conditional send
-  #   notify_via channel: [:a, :b], text: :text         # multi-channel
+  # DSL inside `notify do ... end`:
+  #   channel :foo                    # single channel (symbol resolved as method or literal)
+  #   channels :foo, :bar             # multiple channels
+  #   text { "dynamic" }              # block evaluated in instance context
+  #   text :method_name               # symbol resolved as method call
+  #   text "static"                   # literal string
+  #   only_if { condition }           # conditional send (block)
+  #   only_if :method_name            # conditional send (symbol)
   #
   class Notifier
     include Axn
 
     use :slack
 
-    class_attribute :_notify_via_configs, default: []
+    class_attribute :_notification_definitions, default: []
 
     class << self
-      # Valid keys for notify_via
-      VALID_KEYS = %i[channel if unless text profile blocks attachments icon_emoji thread_ts files].freeze
-
       # Declare a notification to send.
       #
-      # @param channel [Symbol, String, Array] Channel(s) to send to. Symbols are resolved as methods.
-      # @param text [Symbol, String] Text content. Symbols are resolved as methods.
-      # @param if [Symbol, Proc] Condition that must be truthy to send
-      # @param unless [Symbol, Proc] Condition that must be falsy to send
-      # @param kwargs [Hash] Additional SlackSender options (blocks:, attachments:, etc.)
-      # @raise [ArgumentError] If unknown keys are provided
+      # @yield Block evaluated in NotificationDSL context to configure the notification
       #
-      def notify_via(**kwargs)
-        unknown_keys = kwargs.keys - VALID_KEYS
-        if unknown_keys.any?
-          raise ArgumentError, "Unknown keys for notify_via: #{unknown_keys.map(&:inspect).join(", ")}. Valid keys: #{VALID_KEYS.map(&:inspect).join(", ")}"
-        end
+      # @example Simple notification
+      #   notify do
+      #     channel :notifications
+      #     text { "Hello!" }
+      #   end
+      #
+      # @example With condition
+      #   notify do
+      #     channels :ops, :alerts
+      #     only_if { priority == :high }
+      #     text { "Alert: #{message}" }
+      #   end
+      #
+      def notify(&)
+        raise ArgumentError, "notify requires a block" unless block_given?
 
-        self._notify_via_configs = _notify_via_configs + [kwargs.dup]
+        dsl = NotificationDSL.new
+        dsl.instance_eval(&)
+        definition = dsl.build
+
+        self._notification_definitions = _notification_definitions + [definition]
       end
     end
 
     def call
-      self.class._notify_via_configs.each do |config|
-        execute_notification(config.dup)
-      end
-    end
-
-    private
-
-    def execute_notification(config)
-      # Extract conditions
-      if_cond = config.delete(:if)
-      unless_cond = config.delete(:unless)
-
-      return if if_cond && !evaluate_condition(if_cond)
-      return if unless_cond && evaluate_condition(unless_cond)
-
-      # Extract channel separately (it may contain static symbols or method refs)
-      raw_channel = config.delete(:channel)
-
-      # Resolve values (symbols that match methods become method calls)
-      kwargs = config.transform_values { |v| resolve_symbol(v) }
-      channels = Array(raw_channel).map { |ch| resolve_symbol(ch) }
-
-      # Handle multi-channel
-      channels.each do |ch|
-        slack(channel: ch, **kwargs.compact)
-      end
-    end
-
-    def resolve_symbol(value)
-      return value unless value.is_a?(Symbol)
-
-      # Only resolve symbols that correspond to defined methods
-      respond_to?(value, true) ? send(value) : value
-    end
-
-    def evaluate_condition(cond)
-      case cond
-      when Symbol then send(cond)
-      when Proc then instance_exec(&cond)
-      else cond
+      self.class._notification_definitions.each do |definition|
+        definition.execute(self)
       end
     end
   end

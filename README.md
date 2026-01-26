@@ -387,23 +387,26 @@ module SlackNotifiers
     class Finished < SlackSender::Notifier
       expects :deployment_id, type: Integer
 
-      # Always post to the deployments channel, but only for production releases.
-      notify_via channel: :deployments, text: :text, if: :production_release?
+      # Post to the deployments channel for production releases
+      notify do
+        channel :deployments
+        only_if { production_release? }
+        text { ":rocket: *Deploy finished* for `#{deployment.service}` (#{deployment.environment})" }
+      end
 
-      # Optionally also post in the incident channel if this deploy is related to an incident.
-      notify_via channel: :incident_channel_id, text: :text, if: :incident_channel_id?
-
-      def text
-        ":rocket: *Deploy finished* for `#{deployment.service}` (#{deployment.environment})"
+      # Optionally also post in the incident channel if this deploy is related to an incident
+      notify do
+        channel :incident_channel_id
+        only_if { incident_channel_id.present? }
+        text { ":rocket: *Deploy finished* for `#{deployment.service}` (#{deployment.environment})" }
       end
 
       private
 
       def production_release? = deployment.environment.to_s == "production"
 
-      # Dynamic channel ID string (e.g., "C123...") sourced from your domain model.
+      # Dynamic channel ID string (e.g., "C123...") sourced from your domain model
       def incident_channel_id = deployment.incident_slack_channel_id
-      def incident_channel_id? = incident_channel_id.to_s != ""
 
       def deployment = @deployment ||= Deployment.find(deployment_id)
     end
@@ -414,33 +417,52 @@ end
 SlackNotifiers::Deployments::Finished.call(deployment_id: 123)
 ```
 
-#### The `notify_via` DSL
+#### The `notify do ... end` DSL
 
-Declare notifications with conditions and dynamic values:
+The `notify` block groups all Slack message configuration together, keeping it visually separated from Axn declarations like `expects`:
 
 ```ruby
-# Static channel, method for text
-notify_via channel: :notifications, text: :message_text
+notify do
+  channel :notifications           # Single channel
+  text { "Hello!" }                # Dynamic text (block)
+end
 
-# Conditional notification
-notify_via channel: :ops_alerts, text: :text, if: :should_notify?
-notify_via channel: :ops_alerts, text: :text, unless: :archived?
-
-# Multi-channel (sends to all)
-notify_via channel: [:channel_a, :channel_b], text: :text
-
-# All values can be symbols (resolved as methods) or static values
-notify_via channel: :dynamic_channel, text: :dynamic_text, attachments: :build_attachments
+notify do
+  channels :ops_alerts, :ic        # Multiple channels
+  only_if { priority == :high }    # Conditional send
+  text :message_text               # Text from method
+  attachments :build_attachments   # Attachments from method
+end
 ```
 
-**Value Resolution:**
-- **Static values**: `channel: :notifications` - passed through directly to SlackSender
-- **Method references**: `text: :message_text` - calls `message_text` method on the instance
+**DSL Options:**
 
-**Conditions:**
-- `if: :method_name` - Only send if method returns truthy
-- `if: -> { some_condition }` - Lambda evaluated in instance context
-- `unless: :method_name` - Only send if method returns falsy
+| Option | Description |
+|--------|-------------|
+| `channel :sym` | Single channel (symbol resolved via profile, or method if defined) |
+| `channels :a, :b` | Multiple channels |
+| `text { ... }` | Text content (block evaluated in instance context) |
+| `text :method` | Text from method |
+| `text "static"` | Static text |
+| `blocks { ... }` | Slack blocks |
+| `attachments { ... }` | Slack attachments |
+| `icon_emoji :emoji` | Custom emoji |
+| `thread_ts :method` | Thread timestamp |
+| `files { ... }` | File attachments |
+| `only_if { ... }` | Condition (block) — only send if truthy |
+| `only_if :method` | Condition (method) — only send if truthy |
+| `profile :name` | Use a specific SlackSender profile |
+
+**Value Resolution:**
+
+For each field, values are resolved in this order:
+1. **Block**: `text { "dynamic #{value}" }` — evaluated in instance context
+2. **Symbol**: `text :my_method` — calls method if it exists, otherwise treated as literal
+3. **Literal**: `text "static"` — used as-is
+
+**Required Fields:**
+- At least one `channel` or `channels`
+- At least one payload field (`text`, `blocks`, `attachments`, or `files`)
 
 #### Notifier Features
 
@@ -454,12 +476,10 @@ Since `SlackSender::Notifier` inherits from Axn, you get:
 class SlackNotifiers::DailyReport < SlackSender::Notifier
   expects :date, type: Date, default: -> { Date.current }
 
-  notify_via channel: :reports, text: :text, attachments: :report_attachments
-
-  def text = "Daily Report for #{date.strftime('%B %d, %Y')}"
-
-  def report_attachments
-    [{ color: "good", text: "All systems operational" }]
+  notify do
+    channel :reports
+    text { "Daily Report for #{date.strftime('%B %d, %Y')}" }
+    attachments { [{ color: "good", text: "All systems operational" }] }
   end
 end
 
