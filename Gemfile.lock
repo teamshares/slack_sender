@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    slack_sender (0.1.0.alpha)
+    slack_sender (0.1.0.alpha.4)
       axn (= 0.1.0.pre.alpha.4)
       slack-ruby-client
 
