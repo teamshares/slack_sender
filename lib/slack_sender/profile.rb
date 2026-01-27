@@ -4,11 +4,12 @@ module SlackSender
   class Profile # rubocop:disable Metrics/ClassLength
     SUPPORTED_SANDBOX_BEHAVIORS = %i[redirect noop passthrough].freeze
 
-    attr_reader :channels, :user_groups, :slack_client_config, :key, :sandbox
+    attr_reader :default_channel, :channels, :user_groups, :slack_client_config, :key, :sandbox
 
-    def initialize(key:, token:, channels: {}, user_groups: {}, slack_client_config: {}, sandbox: {})
+    def initialize(key:, token:, default_channel: nil, channels: {}, user_groups: {}, slack_client_config: {}, sandbox: {})
       @key = key
       @token = token
+      @default_channel = default_channel
       @channels = channels.freeze
       @user_groups = user_groups.freeze
       @slack_client_config = slack_client_config.freeze
@@ -144,9 +145,16 @@ module SlackSender
     def preprocess_call_kwargs(raw)
       raw.dup.tap do |kwargs|
         validate_and_handle_profile_parameter!(kwargs)
+        apply_default_channel!(kwargs)
         preprocess_channel!(kwargs)
         preprocess_blocks_and_attachments!(kwargs)
       end
+    end
+
+    def apply_default_channel!(kwargs)
+      return if kwargs[:channel].present?
+
+      kwargs[:channel] = default_channel if default_channel.present?
     end
 
     def validate_and_handle_profile_parameter!(kwargs)

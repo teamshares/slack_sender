@@ -4,6 +4,7 @@ FactoryBot.define do
   factory :profile, class: "SlackSender::Profile" do
     key { :test_profile }
     token { "SLACK_API_TOKEN" }
+    default_channel { nil }
     channels { { slack_development: "C01H3KU3B9P", eng_alerts: "C03F1DMJ4PM" } }
     user_groups { { slack_development: "S123" } }
     slack_client_config { {} }
@@ -17,6 +18,7 @@ FactoryBot.define do
       new(
         key:,
         token:,
+        default_channel:,
         channels:,
         user_groups:,
         slack_client_config:,

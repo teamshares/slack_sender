@@ -61,8 +61,9 @@ Register a profile with your Slack token and channel configuration:
 SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
   channels: {
-    alerts: 'C1111111111',
-    general: 'C2222222222',
+    ops_alerts: 'C1111111111',
+    deployments: 'C2222222222',
+    reports: 'C3333333333',
   },
   user_groups: {
     engineers: 'S1234567890',
@@ -84,14 +85,14 @@ SlackSender.register(
 ```ruby
 # Async delivery (recommended) - uses Sidekiq or ActiveJob
 SlackSender.call(
-  channel: :alerts,
-  text: "Server is running low on memory"
+  channel: :ops_alerts,
+  text: ":rotating_light: High error rate on checkout"
 )
 
 # Synchronous delivery (returns thread timestamp)
 thread_ts = SlackSender.call!(
-  channel: :alerts,
-  text: "Deployment completed successfully"
+  channel: :deployments,
+  text: ":rocket: Deploy finished for #{ENV.fetch('APP_NAME', 'my-app')} (#{Rails.env})"
 )
 ```
 
@@ -104,14 +105,14 @@ thread_ts = SlackSender.call!(
 ```ruby
 # Simple text message
 SlackSender.call(
-  channel: :alerts,
-  text: "Hello, World!"
+  channel: :ops_alerts,
+  text: ":warning: Redis latency is elevated"
 )
 
 # With markdown formatting
 SlackSender.call(
-  channel: :alerts,
-  text: "User *#{user.name}* just signed up"
+  channel: :deployments,
+  text: "Deploy started by *#{user.name}* for `#{ENV.fetch('APP_NAME', 'my-app')}`"
 )
 ```
 
@@ -119,8 +120,11 @@ SlackSender.call(
 
 ```ruby
 SlackSender.call(
-  channel: :alerts,
-  text: "Alert from #{Slack::Messages::Formatting.user(user.slack_id)}: check #{Slack::Messages::Formatting.url('https://example.com', 'this link')}"
+  channel: :ops_alerts,
+  text: [
+    ":rotating_light: Incident acknowledged by #{Slack::Messages::Formatting.user(user.slack_id)}",
+    Slack::Messages::Formatting.url('https://status.example.com/incidents/123', 'Incident timeline'),
+  ].join("\n")
 )
 ```
 
@@ -130,44 +134,65 @@ Channels can be specified as symbols (resolved from profile config) or channel I
 
 ```ruby
 # Using symbol (resolved from channels hash)
-SlackSender.call(channel: :alerts, text: "Alert")
+SlackSender.call(channel: :ops_alerts, text: ":rotating_light: Alert")
 
 # Using channel ID directly
-SlackSender.call(channel: "C1234567890", text: "Alert")
+SlackSender.call(channel: "C1234567890", text: ":rotating_light: Alert")
 ```
+
+### Default Channel
+
+Configure a default channel for a profile to avoid passing `channel:` on every call:
+
+```ruby
+SlackSender.register(
+  token: ENV['SLACK_BOT_TOKEN'],
+  default_channel: :ops_alerts,  # Used when no channel is specified
+  channels: {
+    ops_alerts: 'C1111111111',
+    deployments: 'C2222222222',
+  }
+)
+
+# These are equivalent:
+SlackSender.call(text: "Alert!")                    # Uses default_channel
+SlackSender.call(channel: :ops_alerts, text: "Alert!") # Explicit channel
+
+# Override when needed
+SlackSender.call(channel: :deployments, text: "Hello") # Uses :deployments instead
+```
+
+The `default_channel` can be a symbol (resolved from `channels` hash) or a channel ID string.
 
 ### Rich Messages
 
 ```ruby
 # With blocks
 SlackSender.call(
-  channel: :alerts,
+  channel: :deployments,
   blocks: [
     {
       type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "New deployment to production"
-      }
+      text: { type: "mrkdwn", text: ":rocket: *Deploy finished* for `my-app`" }
     }
   ]
 )
 
 # With attachments
 SlackSender.call(
-  channel: :alerts,
+  channel: :ops_alerts,
   attachments: [
     {
       color: "good",
-      text: "Deployment successful"
+      text: "Autoscaling event completed successfully"
     }
   ]
 )
 
 # With custom emoji
 SlackSender.call(
-  channel: :alerts,
-  text: "Robot says hello",
+  channel: :ops_alerts,
+  text: "Background job queue is healthy",
   icon_emoji: "robot"
 )
 ```
@@ -179,15 +204,15 @@ File uploads are supported with synchronous delivery (`call!`). Note: file uploa
 ```ruby
 # Single file
 SlackSender.call!(
-  channel: :alerts,
-  text: "Here's the report",
+  channel: :reports,
+  text: "Daily ops report attached",
   files: [File.open("report.pdf")]
 )
 
 # Multiple files
 SlackSender.call!(
-  channel: :alerts,
-  text: "Multiple files attached",
+  channel: :reports,
+  text: "Daily ops report (details + raw export)",
   files: [
     File.open("report.pdf"),
     File.open("data.csv")
@@ -210,15 +235,15 @@ Supported file types:
 ```ruby
 # Reply to a thread
 SlackSender.call(
-  channel: :alerts,
-  text: "This is a reply",
+  channel: :ops_alerts,
+  text: "Mitigation: rolled back to previous release",
   thread_ts: "1234567890.123456"
 )
 
 # Get thread timestamp from initial message
 thread_ts = SlackSender.call!(
-  channel: :alerts,
-  text: "Initial message"
+  channel: :ops_alerts,
+  text: ":rotating_light: Elevated 500s detected on /checkout"
 )
 # thread_ts => "1234567890.123456"
 ```
@@ -228,8 +253,8 @@ thread_ts = SlackSender.call!(
 Format user group mentions (automatically redirects to sandbox user_group when in sandbox mode):
 
 ```ruby
-SlackSender.format_group_mention(:engineers)
-# => "<!subteam^S1234567890|@engineers>"
+SlackSender.format_group_mention(:on_call)
+# => "<!subteam^S1234567890|@on_call>"
 ```
 
 If `sandbox.user_group.replace_with` is configured and the app is in sandbox mode (per `config.sandbox_mode?`), `format_group_mention` will replace the requested group with the sandbox user_group instead, similar to how sandbox channel redirects messages:
@@ -257,7 +282,7 @@ Use a callable for the token to fetch it dynamically:
 ```ruby
 SlackSender.register(
   token: -> { SecretsManager.get_slack_token },
-  channels: { alerts: 'C123' }
+  channels: { ops_alerts: 'C123' }
 )
 ```
 
@@ -268,36 +293,201 @@ The token is memoized after first access, so the callable is only evaluated once
 Register multiple profiles for different Slack workspaces:
 
 ```ruby
-# Default profile
+# Internal engineering workspace
 SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
-  channels: { alerts: 'C123' }
+  channels: { ops_alerts: 'C123', deployments: 'C234' }
 )
 
 # Customer support workspace
 SlackSender.register(:support,
   token: ENV['SUPPORT_SLACK_TOKEN'],
-  channels: { tickets: 'C456' }
+  channels: { support_tickets: 'C456' }
 )
 
 # Use specific profile
 SlackSender.profile(:support).call(
-  channel: :tickets,
-  text: "New ticket received"
+  channel: :support_tickets,
+  text: "New high-priority ticket received"
 )
 
 # Or use bracket notation
 SlackSender[:support].call(
-  channel: :tickets,
-  text: "New ticket received"
+  channel: :support_tickets,
+  text: "New high-priority ticket received"
 )
 
 # Or override default profile with profile parameter
 SlackSender.call(
   profile: :support,
-  channel: :tickets,
-  text: "New ticket received"
+  channel: :support_tickets,
+  text: "New high-priority ticket received"
 )
+```
+
+## Axn Integration
+
+SlackSender provides deep integration with [Axn](https://teamshares.github.io/axn/) for building Slack-enabled actions and dedicated notifier classes.
+
+### Slack Strategy for Axn Actions
+
+Add Slack messaging capabilities to any Axn action using the `:slack` strategy:
+
+```ruby
+class Deployments::Finish
+  include Axn
+  use :slack, channel: :deployments  # Default channel for all slack() calls
+
+  expects :deployment, type: Deployment
+
+  on_success { slack ":rocket: Deploy finished for `#{deployment.service}`" }
+  on_failure { slack ":x: Deploy failed for `#{deployment.service}`", channel: :ops_alerts }
+
+  def call
+    slack "Finalizing deploy for `#{deployment.service}`..." # Uses default channel
+    # ... rollout / status checks / persistence ...
+  end
+end
+```
+
+#### Strategy Configuration
+
+```ruby
+use :slack, channel: :general             # Default channel for all slack() calls
+use :slack, channel: :general, profile: :support  # Use a specific SlackSender profile
+use :slack                                # No default channel (must pass channel: each time)
+```
+
+#### The `slack(...)` Method
+
+The strategy adds a `slack` instance method with flexible calling conventions:
+
+```ruby
+# Positional text argument (sugar for text: kwarg)
+slack "Hello world"
+
+# Override channel
+slack "Hello", channel: :other_channel
+
+# Full kwargs
+slack text: "Hello", channel: :ops_alerts, icon_emoji: "robot"
+
+# With blocks or attachments
+slack channel: :ops_alerts, blocks: [{ type: "section", text: { type: "mrkdwn", text: "*Bold*" } }]
+```
+
+### SlackSender::Notifier Base Class
+
+For actions whose sole purpose is sending Slack notifications, inherit from `SlackSender::Notifier`:
+
+```ruby
+# app/slack_notifiers/deployments/finished.rb
+module SlackNotifiers
+  module Deployments
+    class Finished < SlackSender::Notifier
+      expects :deployment_id, type: Integer
+
+      # Post to the deployments channel for production releases
+      notify do
+        channel :deployments
+        only_if { production_release? }
+        text { ":rocket: *Deploy finished* for `#{deployment.service}` (#{deployment.environment})" }
+      end
+
+      # Optionally also post in the incident channel if this deploy is related to an incident
+      notify do
+        channel :incident_channel_id
+        only_if { incident_channel_id.present? }
+        text { ":rocket: *Deploy finished* for `#{deployment.service}` (#{deployment.environment})" }
+      end
+
+      private
+
+      def production_release? = deployment.environment.to_s == "production"
+
+      # Dynamic channel ID string (e.g., "C123...") sourced from your domain model
+      def incident_channel_id = deployment.incident_slack_channel_id
+
+      def deployment = @deployment ||= Deployment.find(deployment_id)
+    end
+  end
+end
+
+# Call it like any Axn
+SlackNotifiers::Deployments::Finished.call(deployment_id: 123)
+```
+
+#### The `notify do ... end` DSL
+
+The `notify` block groups all Slack message configuration together, keeping it visually separated from Axn declarations like `expects`:
+
+```ruby
+notify do
+  channel :notifications           # Single channel
+  text { "Hello!" }                # Dynamic text (block)
+end
+
+notify do
+  channels :ops_alerts, :ic        # Multiple channels
+  only_if { priority == :high }    # Conditional send
+  text :message_text               # Text from method
+  attachments :build_attachments   # Attachments from method
+end
+```
+
+**DSL Options:**
+
+| Option | Description |
+|--------|-------------|
+| `channel :sym` | Single channel (symbol resolved via profile, or method if defined) |
+| `channels :a, :b` | Multiple channels |
+| `text { ... }` | Text content (block evaluated in instance context) |
+| `text :method` | Text from method |
+| `text "static"` | Static text |
+| `blocks { ... }` | Slack blocks |
+| `attachments { ... }` | Slack attachments |
+| `icon_emoji :emoji` | Custom emoji |
+| `thread_ts :method` | Thread timestamp |
+| `files { ... }` | File attachments |
+| `only_if { ... }` | Condition (block) — only send if truthy |
+| `only_if :method` | Condition (method) — only send if truthy |
+| `profile :name` | Use a specific SlackSender profile |
+
+**Value Resolution:**
+
+For each field, values are resolved in this order:
+1. **Block**: `text { "dynamic #{value}" }` — evaluated in instance context
+2. **Symbol**: `text :my_method` — calls method if it exists, otherwise treated as literal
+3. **Literal**: `text "static"` — used as-is
+
+**Required Fields:**
+- At least one `channel` or `channels`
+- At least one payload field (`text`, `blocks`, `attachments`, or `files`)
+
+#### Notifier Features
+
+Since `SlackSender::Notifier` inherits from Axn, you get:
+- `expects` / `exposes` for input/output contracts
+- Hooks (`before`, `after`, `on_success`, `on_failure`)
+- Automatic logging and error handling
+- Async execution with `call_async`
+
+```ruby
+class SlackNotifiers::DailyReport < SlackSender::Notifier
+  expects :date, type: Date, default: -> { Date.current }
+
+  notify do
+    channel :reports
+    text { "Daily Report for #{date.strftime('%B %d, %Y')}" }
+    attachments { [{ color: "good", text: "All systems operational" }] }
+  end
+end
+
+# Sync
+SlackNotifiers::DailyReport.call(date: Date.yesterday)
+
+# Async (via Sidekiq or ActiveJob)
+SlackNotifiers::DailyReport.call_async(date: Date.yesterday)
 ```
 
 ## Configuration
@@ -345,6 +535,7 @@ end
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `token` | `String` or callable | Required | Slack Bot User OAuth Token. Can be a proc/lambda for dynamic fetching |
+| `default_channel` | `Symbol`, `String`, or `nil` | `nil` | Default channel to use when no channel is specified in `call`/`call!`. Can be a symbol (resolved from `channels` hash) or a channel ID string |
 | `channels` | `Hash` | `{}` | Hash mapping symbol keys to channel IDs (e.g., `{ alerts: 'C123' }`) |
 | `user_groups` | `Hash` | `{}` | Hash mapping symbol keys to user group IDs (e.g., `{ engineers: 'S123' }`) |
 | `slack_client_config` | `Hash` | `{}` | Additional options passed to `Slack::Web::Client` constructor |
@@ -482,7 +673,7 @@ If Sidekiq is available, it's automatically used:
 
 ```ruby
 # No configuration needed - auto-detected
-SlackSender.call(channel: :alerts, text: "Message")
+SlackSender.call(channel: :ops_alerts, text: "Message")
 ```
 
 ### ActiveJob
@@ -502,7 +693,7 @@ For synchronous delivery (no background job):
 ```ruby
 # Returns thread timestamp immediately
 thread_ts = SlackSender.call!(
-  channel: :alerts,
+  channel: :ops_alerts,
   text: "Message"
 )
 ```
@@ -532,7 +723,7 @@ The following errors are not retried (discarded immediately):
 ```ruby
 SlackSender.call(
   channel: :deployments,
-  text: "Deployment to #{Rails.env} completed",
+  text: ":rocket: Deploy finished for `my-app` (#{Rails.env})",
   blocks: [
     {
       type: "section",
@@ -549,8 +740,8 @@ SlackSender.call(
 
 ```ruby
 SlackSender.call(
-  channel: :errors,
-  text: "Error in payment processing",
+  channel: :ops_alerts,
+  text: ":rotating_light: Payment processing error",
   attachments: [
     {
       color: "danger",
@@ -577,7 +768,7 @@ thread_ts = SlackSender.call!(
 # Follow up in thread
 SlackSender.call(
   channel: :reports,
-  text: "Report analysis complete",
+  text: "Summary: no SEV incidents; deploys are healthy",
   thread_ts: thread_ts
 )
 ```
@@ -610,7 +801,7 @@ A: The bot must be invited to the channel. Options:
 A: File uploads are only supported with synchronous delivery (`call!`). This is a known limitation and will be addressed in a future release. Use `call!` for file uploads:
 
 ```ruby
-SlackSender.call!(channel: :alerts, files: [file])
+SlackSender.call!(channel: :ops_alerts, files: [file])
 ```
 
 ### Q: How do I disable SlackSender temporarily?
@@ -658,7 +849,7 @@ bundle exec rspec
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/teamshares/slack_sender.
+Bug reports and pull requests are welcome on GitHub at `https://github.com/teamshares/slack_sender`.
 
 ## License
 
