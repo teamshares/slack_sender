@@ -488,7 +488,7 @@ RSpec.describe SlackSender::Notifier do
       let(:notifier_class) do
         Class.new(described_class) do
           notify do
-            channel :notifications  # :notifications is not a method, stays as symbol
+            channel :notifications # :notifications is not a method, stays as symbol
             text "test"
           end
         end

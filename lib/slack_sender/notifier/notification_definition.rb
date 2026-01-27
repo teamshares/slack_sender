@@ -24,17 +24,13 @@ module SlackSender
         resolved_channels = channels.flat_map { |ch| resolve(ch, notifier) }
 
         # Validate: at least one channel
-        if resolved_channels.compact.empty?
-          raise ArgumentError, "Missing `channel` in notify block. Add `channel :foo` or `channels ...`."
-        end
+        raise ArgumentError, "Missing `channel` in notify block. Add `channel :foo` or `channels ...`." if resolved_channels.compact.empty?
 
         # Resolve payload
         resolved_payload = payload.transform_values { |v| resolve(v, notifier) }.compact
 
         # Validate: at least one payload field
-        if resolved_payload.empty?
-          raise ArgumentError, "Missing payload in notify block. Add `text`, `blocks`, `attachments`, or `files`."
-        end
+        raise ArgumentError, "Missing payload in notify block. Add `text`, `blocks`, `attachments`, or `files`." if resolved_payload.empty?
 
         # Resolve profile if specified
         resolved_profile = profile ? resolve(profile, notifier) : nil
