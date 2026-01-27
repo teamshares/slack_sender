@@ -1,20 +1,83 @@
 # frozen_string_literal: true
 
 module SlackSender
-  class Profile
-    attr_reader :dev_channel, :dev_user_group, :channels, :user_groups, :slack_client_config, :dev_channel_redirect_prefix, :key
+  class Profile # rubocop:disable Metrics/ClassLength
+    SUPPORTED_SANDBOX_BEHAVIORS = %i[redirect noop passthrough].freeze
 
-    def initialize(key:, token:, dev_channel: nil, dev_user_group: nil, channels: {}, user_groups: {}, slack_client_config: {},
-                   dev_channel_redirect_prefix: nil)
+    attr_reader :channels, :user_groups, :slack_client_config, :key, :sandbox
+
+    def initialize(key:, token:, channels: {}, user_groups: {}, slack_client_config: {}, sandbox: {})
       @key = key
       @token = token
-      @dev_channel = dev_channel
-      @dev_user_group = dev_user_group
       @channels = channels.freeze
       @user_groups = user_groups.freeze
       @slack_client_config = slack_client_config.freeze
-      @dev_channel_redirect_prefix = dev_channel_redirect_prefix
+      @sandbox = normalize_sandbox_config(sandbox).freeze
+
+      validate_sandbox_config!
     end
+
+    # Sandbox accessors for cleaner internal access
+    def sandbox_channel = sandbox.dig(:channel, :replace_with)
+    def sandbox_channel_message_prefix = sandbox.dig(:channel, :message_prefix)
+    def sandbox_user_group = sandbox.dig(:user_group, :replace_with)
+
+    # Resolves the effective sandbox behavior for this profile
+    # Resolution order:
+    # 1. Explicit sandbox.behavior if set
+    # 2. :redirect if sandbox.channel.replace_with is set
+    # 3. Global config.sandbox_default_behavior
+    def resolved_sandbox_behavior
+      return sandbox[:behavior] if sandbox[:behavior]
+      return :redirect if sandbox_channel.present?
+
+      SlackSender.config.sandbox_default_behavior
+    end
+
+    private
+
+    def normalize_sandbox_config(config)
+      return {} if config.nil? || config.empty?
+
+      result = {
+        channel: normalize_sandbox_channel(config[:channel]),
+        user_group: normalize_sandbox_user_group(config[:user_group]),
+      }.compact
+
+      # Extract and validate behavior if present
+      if config[:behavior]
+        behavior = config[:behavior].to_sym
+        unless SUPPORTED_SANDBOX_BEHAVIORS.include?(behavior)
+          raise ArgumentError,
+                "Unsupported sandbox behavior: #{behavior.inspect}. " \
+                "Supported behaviors: #{SUPPORTED_SANDBOX_BEHAVIORS.inspect}"
+        end
+        result[:behavior] = behavior
+      end
+
+      result
+    end
+
+    def normalize_sandbox_channel(channel_config)
+      return nil if channel_config.nil?
+
+      channel_config.slice(:replace_with, :message_prefix).compact.presence
+    end
+
+    def normalize_sandbox_user_group(user_group_config)
+      return nil if user_group_config.nil?
+
+      user_group_config.slice(:replace_with).compact.presence
+    end
+
+    def validate_sandbox_config!
+      # If explicit behavior is :redirect, channel.replace_with is required
+      return unless sandbox[:behavior] == :redirect && sandbox_channel.blank?
+
+      raise ArgumentError, ErrorMessages::SANDBOX_REDIRECT_REQUIRES_CHANNEL
+    end
+
+    public
 
     def call(**)
       enabled, kwargs = enabled_and_preprocessed_kwargs(**)
@@ -54,7 +117,7 @@ module SlackSender
                    key
                  end
 
-      group_id = dev_user_group if dev_user_group.present? && !SlackSender.config.in_production?
+      group_id = sandbox_user_group if sandbox_user_group.present? && SlackSender.config.sandbox_mode?
 
       ::Slack::Messages::Formatting.group_link(group_id)
     end

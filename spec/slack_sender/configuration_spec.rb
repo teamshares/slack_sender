@@ -25,20 +25,20 @@ RSpec.describe SlackSender::Configuration do
     end
   end
 
-  describe "#in_production?" do
-    context "when @in_production is explicitly set" do
+  describe "#sandbox_mode?" do
+    context "when @sandbox_mode is explicitly set" do
       it "returns true when set to true" do
-        config.in_production = true
-        expect(config.in_production?).to be true
+        config.sandbox_mode = true
+        expect(config.sandbox_mode?).to be true
       end
 
       it "returns false when set to false" do
-        config.in_production = false
-        expect(config.in_production?).to be false
+        config.sandbox_mode = false
+        expect(config.sandbox_mode?).to be false
       end
     end
 
-    context "when @in_production is nil (default)" do
+    context "when @sandbox_mode is nil (default)" do
       context "when Rails is defined" do
         before do
           stub_const("Rails", double(env: double(production?: rails_production)))
@@ -47,13 +47,13 @@ RSpec.describe SlackSender::Configuration do
         context "in Rails production" do
           let(:rails_production) { true }
 
-          it { expect(config.in_production?).to be true }
+          it { expect(config.sandbox_mode?).to be false }
         end
 
         context "in Rails non-production" do
           let(:rails_production) { false }
 
-          it { expect(config.in_production?).to be false }
+          it { expect(config.sandbox_mode?).to be true }
         end
       end
 
@@ -62,8 +62,43 @@ RSpec.describe SlackSender::Configuration do
           hide_const("Rails")
         end
 
-        it { expect(config.in_production?).to be false }
+        it { expect(config.sandbox_mode?).to be true }
       end
+    end
+  end
+
+  describe "#sandbox_default_behavior" do
+    it "defaults to :noop" do
+      expect(config.sandbox_default_behavior).to eq(:noop)
+    end
+
+    it "accepts :noop" do
+      config.sandbox_default_behavior = :noop
+      expect(config.sandbox_default_behavior).to eq(:noop)
+    end
+
+    it "accepts :redirect" do
+      config.sandbox_default_behavior = :redirect
+      expect(config.sandbox_default_behavior).to eq(:redirect)
+    end
+
+    it "accepts :passthrough" do
+      config.sandbox_default_behavior = :passthrough
+      expect(config.sandbox_default_behavior).to eq(:passthrough)
+    end
+
+    it "raises ArgumentError for unsupported behavior" do
+      expect { config.sandbox_default_behavior = :unknown }.to raise_error(
+        ArgumentError,
+        /Unsupported sandbox behavior: :unknown/,
+      )
+    end
+
+    it "includes supported behaviors in error message" do
+      expect { config.sandbox_default_behavior = :invalid }.to raise_error(
+        ArgumentError,
+        /Supported behaviors: \[:noop, :redirect, :passthrough\]/,
+      )
     end
   end
 

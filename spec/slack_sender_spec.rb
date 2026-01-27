@@ -14,11 +14,11 @@ RSpec.describe SlackSender do
       it "registers a named :default profile and sets it as default" do
         profile = described_class.register(
           token: "TEST_TOKEN",
-          dev_channel: "C123",
+          sandbox: { channel: { replace_with: "C123" } },
         )
 
         expect(profile).to be_a(SlackSender::Profile)
-        expect(profile.dev_channel).to eq("C123")
+        expect(profile.sandbox_channel).to eq("C123")
         expect(described_class.profile(:default)).to eq(profile)
         expect(described_class.default_profile).to eq(profile)
       end
@@ -26,13 +26,13 @@ RSpec.describe SlackSender do
       it "raises error if :default profile already registered" do
         described_class.register(
           token: "TEST_TOKEN",
-          dev_channel: "C123",
+          sandbox: { channel: { replace_with: "C123" } },
         )
 
         expect do
           described_class.register(
             token: "OTHER_TOKEN",
-            dev_channel: "C456",
+            sandbox: { channel: { replace_with: "C456" } },
           )
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
@@ -40,12 +40,12 @@ RSpec.describe SlackSender do
       it "raises error if :default already registered via explicit :default call" do
         described_class.register(:default,
                                  token: "TEST_TOKEN",
-                                 dev_channel: "C123")
+                                 sandbox: { channel: { replace_with: "C123" } })
 
         expect do
           described_class.register(
             token: "OTHER_TOKEN",
-            dev_channel: "C456",
+            sandbox: { channel: { replace_with: "C456" } },
           )
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
@@ -55,10 +55,10 @@ RSpec.describe SlackSender do
       it "registers a named :default profile and sets it as default" do
         profile = described_class.register(:default,
                                            token: "TEST_TOKEN",
-                                           dev_channel: "C123")
+                                           sandbox: { channel: { replace_with: "C123" } })
 
         expect(profile).to be_a(SlackSender::Profile)
-        expect(profile.dev_channel).to eq("C123")
+        expect(profile.sandbox_channel).to eq("C123")
         expect(described_class.profile(:default)).to eq(profile)
         expect(described_class.default_profile).to eq(profile)
       end
@@ -66,41 +66,41 @@ RSpec.describe SlackSender do
       it "raises error if :default profile already registered" do
         described_class.register(:default,
                                  token: "TEST_TOKEN",
-                                 dev_channel: "C123")
+                                 sandbox: { channel: { replace_with: "C123" } })
 
         expect do
           described_class.register(:default,
                                    token: "OTHER_TOKEN",
-                                   dev_channel: "C456")
+                                   sandbox: { channel: { replace_with: "C456" } })
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
 
       it "raises error if :default already registered via no-arg call" do
         described_class.register(
           token: "TEST_TOKEN",
-          dev_channel: "C123",
+          sandbox: { channel: { replace_with: "C123" } },
         )
 
         expect do
           described_class.register(:default,
                                    token: "OTHER_TOKEN",
-                                   dev_channel: "C456")
+                                   sandbox: { channel: { replace_with: "C456" } })
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
 
       it "behaves identically to calling with no positional argument" do
         profile1 = described_class.register(
           token: "TEST_TOKEN",
-          dev_channel: "C123",
+          sandbox: { channel: { replace_with: "C123" } },
         )
 
         SlackSender::ProfileRegistry.clear!
 
         profile2 = described_class.register(:default,
                                             token: "TEST_TOKEN",
-                                            dev_channel: "C123")
+                                            sandbox: { channel: { replace_with: "C123" } })
 
-        expect(profile1.dev_channel).to eq(profile2.dev_channel)
+        expect(profile1.sandbox_channel).to eq(profile2.sandbox_channel)
         expect(profile1.client.token).to eq(profile2.client.token)
       end
     end
@@ -109,17 +109,17 @@ RSpec.describe SlackSender do
       it "registers a named profile" do
         profile = described_class.register(:production,
                                            token: "TEST_TOKEN",
-                                           dev_channel: "C123")
+                                           sandbox: { channel: { replace_with: "C123" } })
 
         expect(profile).to be_a(SlackSender::Profile)
-        expect(profile.dev_channel).to eq("C123")
+        expect(profile.sandbox_channel).to eq("C123")
         expect(described_class.profile(:production)).to eq(profile)
       end
 
       it "does not automatically set as default" do
         described_class.register(:production,
                                  token: "TEST_TOKEN",
-                                 dev_channel: "C123")
+                                 sandbox: { channel: { replace_with: "C123" } })
 
         expect do
           described_class.default_profile
@@ -129,12 +129,12 @@ RSpec.describe SlackSender do
       it "raises error if profile already registered" do
         described_class.register(:production,
                                  token: "TEST_TOKEN",
-                                 dev_channel: "C123")
+                                 sandbox: { channel: { replace_with: "C123" } })
 
         expect do
           described_class.register(:production,
                                    token: "OTHER_TOKEN",
-                                   dev_channel: "C456")
+                                   sandbox: { channel: { replace_with: "C456" } })
         end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
       end
     end
@@ -145,7 +145,7 @@ RSpec.describe SlackSender do
       let(:profile) do
         described_class.register(
           token: "TEST_TOKEN",
-          dev_channel: "C123",
+          sandbox: { channel: { replace_with: "C123" } },
         )
       end
 
@@ -169,7 +169,7 @@ RSpec.describe SlackSender do
         let!(:other_profile) do
           described_class.register(:other_profile,
                                    token: "OTHER_TOKEN",
-                                   dev_channel: "C_OTHER")
+                                   sandbox: { channel: { replace_with: "C_OTHER" } })
         end
 
         it "allows profile parameter to override default profile" do
@@ -206,7 +206,7 @@ RSpec.describe SlackSender do
       let(:profile) do
         described_class.register(
           token: "TEST_TOKEN",
-          dev_channel: "C123",
+          sandbox: { channel: { replace_with: "C123" } },
         )
       end
 
@@ -233,7 +233,7 @@ RSpec.describe SlackSender do
     let!(:profile) do
       described_class.register(:custom_profile,
                                token: "TEST_TOKEN",
-                               dev_channel: "C123")
+                               sandbox: { channel: { replace_with: "C123" } })
     end
 
     it "is an alias for .profile" do
@@ -253,14 +253,14 @@ RSpec.describe SlackSender do
     let!(:profile) do
       described_class.register(
         token: "TEST_TOKEN",
-        dev_channel: "C123",
+        sandbox: { channel: { replace_with: "C123" } },
         user_groups: { eng_team: "S123ABC" },
       )
     end
 
-    context "in production" do
+    context "when not in sandbox mode (production)" do
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       it "delegates to default_profile.format_group_mention" do
@@ -268,32 +268,33 @@ RSpec.describe SlackSender do
       end
     end
 
-    context "not in production" do
+    context "when in sandbox mode (not production)" do
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(false)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
       end
 
-      context "with dev_user_group configured" do
+      context "with sandbox user_group configured" do
         let!(:profile) do
           described_class.register(
             token: "TEST_TOKEN",
-            dev_channel: "C123",
-            dev_user_group: "S_DEV_GROUP",
+            sandbox: {
+              channel: { replace_with: "C123" },
+              user_group: { replace_with: "S_DEV_GROUP" },
+            },
             user_groups: { eng_team: "S123ABC" },
           )
         end
 
-        it "uses dev_user_group instead of requested group" do
+        it "uses sandbox user_group instead of requested group" do
           expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S_DEV_GROUP>")
         end
       end
 
-      context "without dev_user_group configured" do
+      context "without sandbox user_group configured" do
         let!(:profile) do
           described_class.register(
             token: "TEST_TOKEN",
-            dev_channel: "C123",
-            dev_user_group: nil,
+            sandbox: { channel: { replace_with: "C123" } },
             user_groups: { eng_team: "S123ABC" },
           )
         end
@@ -307,7 +308,7 @@ RSpec.describe SlackSender do
     context "when default profile is not set" do
       before do
         SlackSender::ProfileRegistry.clear!
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       it "raises an error" do

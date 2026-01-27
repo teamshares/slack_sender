@@ -19,7 +19,7 @@ RSpec.describe SlackSender::DeliveryAxn do
   describe "expects" do
     describe "channel validation" do
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       context "with validate_known_channel: true and known channel name" do
@@ -70,7 +70,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
     describe "text preprocessing" do
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       context "with markdown text" do
@@ -96,7 +96,7 @@ RSpec.describe SlackSender::DeliveryAxn do
       subject(:result) { action_class.call(profile:, channel:, text:, icon_emoji:) }
 
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       context "with emoji without colons" do
@@ -237,7 +237,7 @@ RSpec.describe SlackSender::DeliveryAxn do
         subject(:result) { action_class.call(profile:, channel:, files:, text:) }
 
         before do
-          allow(SlackSender.config).to receive(:in_production?).and_return(true)
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
         end
 
         it "succeeds" do
@@ -257,11 +257,11 @@ RSpec.describe SlackSender::DeliveryAxn do
       let(:thread_ts) { nil }
 
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(production?)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(sandbox_mode?)
       end
 
-      context "in production" do
-        let(:production?) { true }
+      context "when not in sandbox mode (production)" do
+        let(:sandbox_mode?) { false }
 
         it "posts to actual channel with actual text" do
           expect(client_dbl).to receive(:chat_postMessage).with(
@@ -276,13 +276,13 @@ RSpec.describe SlackSender::DeliveryAxn do
         end
       end
 
-      context "not in production" do
-        let(:production?) { false }
+      context "when in sandbox mode (not production)" do
+        let(:sandbox_mode?) { true }
 
-        it "posts to dev channel with wrapped text" do
+        it "posts to sandbox channel with wrapped text" do
           expect(client_dbl).to receive(:chat_postMessage).with(
             hash_including(
-              channel: profile.channels[:slack_development],
+              channel: profile.sandbox_channel,
               text: a_string_matching(/:construction:.*This message would have been sent to.*#{channel}.*in production/m),
             ),
           )
@@ -290,13 +290,13 @@ RSpec.describe SlackSender::DeliveryAxn do
           expect(result).to be_ok
         end
 
-        context "with custom dev_channel_redirect_prefix" do
-          let(:profile) { build(:profile, dev_channel_redirect_prefix: "🚧 DEV MODE: Would have gone to %s 🚧") }
+        context "with custom sandbox channel message_prefix" do
+          let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C01H3KU3B9P", message_prefix: "🚧 DEV MODE: Would have gone to %s 🚧" } }) }
 
           it "uses custom prefix and formats channel_display correctly" do
             expect(client_dbl).to receive(:chat_postMessage).with(
               hash_including(
-                channel: profile.channels[:slack_development],
+                channel: profile.sandbox_channel,
                 text: a_string_matching(/🚧 DEV MODE: Would have gone to.*#{channel}.*🚧/m),
               ),
             )
@@ -316,7 +316,7 @@ RSpec.describe SlackSender::DeliveryAxn do
       before do
         file.write("file content")
         file.rewind
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
         allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "f_123" }] })
         allow(client_dbl).to receive(:files_info).and_return({
                                                                "file" => { "shares" => { "public" => { channel => [{ "ts" => "123.456" }] } } },
@@ -381,7 +381,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
       context "when IsArchived error occurs during file upload" do
         before do
-          allow(SlackSender.config).to receive(:in_production?).and_return(true)
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
           allow(client_dbl).to receive(:files_upload_v2).and_raise(
             SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived"),
           )
@@ -416,7 +416,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
     describe "error handling" do
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       shared_examples "channel error with warning" do |error_class, error_code, error_text|
@@ -719,7 +719,7 @@ RSpec.describe SlackSender::DeliveryAxn do
     subject(:result) { action_class.call(profile:, channel:, text: "Line 1\nLine 2\nLine 3") }
 
     before do
-      allow(SlackSender.config).to receive(:in_production?).and_return(false)
+      allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
     end
 
     it "wraps each line with quote formatting" do
@@ -746,8 +746,8 @@ RSpec.describe SlackSender::DeliveryAxn do
       end
     end
 
-    context "with custom dev_channel_redirect_prefix" do
-      let(:profile) { build(:profile, dev_channel_redirect_prefix: "Test prefix with %s replacement") }
+    context "with custom sandbox channel message_prefix" do
+      let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C01H3KU3B9P", message_prefix: "Test prefix with %s replacement" } }) }
 
       it "replaces %s with channel_display value" do
         expect(client_dbl).to receive(:chat_postMessage).with(
@@ -756,6 +756,126 @@ RSpec.describe SlackSender::DeliveryAxn do
           ),
         )
 
+        expect(result).to be_ok
+      end
+    end
+  end
+
+  describe "sandbox behavior" do
+    before do
+      allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+    end
+
+    describe "behavior :redirect" do
+      let(:profile) { build(:profile, sandbox: { behavior: :redirect, channel: { replace_with: "C_SANDBOX" } }) }
+
+      it "redirects message to sandbox channel" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(channel: "C_SANDBOX"),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+
+      it "adds prefix to message text" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(
+            text: a_string_matching(/would have been sent to.*in production/i),
+          ),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+    end
+
+    describe "behavior :noop" do
+      let(:profile) { build(:profile, sandbox: { behavior: :noop }) }
+
+      it "does not send message to Slack" do
+        expect(client_dbl).not_to receive(:chat_postMessage)
+        expect(client_dbl).not_to receive(:files_upload_v2)
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+
+      it "logs the noop action" do
+        expect(action_class).to receive(:info).with(/\[SANDBOX NOOP\].*Profile:.*Channel:.*Text:/i).at_least(:once)
+        allow(action_class).to receive(:info)
+
+        action_class.call(profile:, channel:, text:)
+      end
+
+      it "returns success message indicating noop" do
+        result = action_class.call(profile:, channel:, text:)
+        expect(result.success).to include("noop")
+      end
+    end
+
+    describe "behavior :passthrough" do
+      let(:profile) { build(:profile, sandbox: { behavior: :passthrough }) }
+
+      it "sends message to the actual channel" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(channel:),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+
+      it "does not modify the message text" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(text:),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+    end
+
+    describe "behavior resolution fallback" do
+      context "when profile has no sandbox config" do
+        let(:profile) { build(:profile, sandbox: {}) }
+
+        it "uses config.sandbox_default_behavior" do
+          allow(SlackSender.config).to receive(:sandbox_default_behavior).and_return(:noop)
+          expect(client_dbl).not_to receive(:chat_postMessage)
+
+          result = action_class.call(profile:, channel:, text:)
+          expect(result).to be_ok
+        end
+      end
+
+      context "when profile has channel.replace_with but no explicit behavior" do
+        let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C_INFERRED" } }) }
+
+        it "infers :redirect behavior" do
+          expect(client_dbl).to receive(:chat_postMessage).with(
+            hash_including(channel: "C_INFERRED"),
+          )
+
+          result = action_class.call(profile:, channel:, text:)
+          expect(result).to be_ok
+        end
+      end
+    end
+
+    describe "when sandbox_mode? is false" do
+      before do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+      end
+
+      let(:profile) { build(:profile, sandbox: { behavior: :noop }) }
+
+      it "ignores sandbox config and sends to real channel" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(channel:, text:),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
         expect(result).to be_ok
       end
     end
