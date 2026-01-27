@@ -9,7 +9,7 @@ module SlackSender
           raise InvalidArgumentsError, ErrorMessages::NO_CONTENT_PROVIDED if content_blank?
           raise InvalidArgumentsError, ErrorMessages::INVALID_BLOCKS if blocks.present? && !blocks_valid?
 
-          if files.present?
+          if files.present? || file_ids.present?
             raise InvalidArgumentsError, ErrorMessages::FILES_WITH_BLOCKS if blocks.present?
             raise InvalidArgumentsError, ErrorMessages::FILES_WITH_ATTACHMENTS if attachments.present?
             raise InvalidArgumentsError, ErrorMessages::FILES_WITH_ICON_EMOJI if icon_emoji.present?
@@ -19,7 +19,7 @@ module SlackSender
 
       private
 
-      def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank?
+      def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank? && file_ids.blank?
 
       def explicit_blank_text_only?
         # If the caller explicitly passed `text:` but it is blank, treat it as a no-op
