@@ -17,6 +17,11 @@ module SlackSender
     include ErrorMessageParsing
     include Validation
 
+    # Expose InvalidArgumentsError message directly (these errors skip retries)
+    # Handle both direct raises and raises from preprocess lambdas (wrapped in PreprocessingError)
+    error(if: InvalidArgumentsError) { |e| e.message }
+    error(if: ->(exception:) { exception.is_a?(Axn::ContractViolation::PreprocessingError) && exception.cause.is_a?(InvalidArgumentsError) }) { |e| e.cause.message }
+
     expects :profile, type: Profile, preprocess: lambda { |p|
       # If given a string/symbol (profile name), look it up in the registry
       # Otherwise, assume it's already a Profile object
@@ -25,7 +30,11 @@ module SlackSender
     expects :validate_known_channel, type: :boolean, default: false
     expects :channel, type: String, preprocess: lambda { |ch|
       # NOTE: symbols are preprocessed to strings in Profile#preprocess_call_kwargs
-      validate_known_channel ? (profile.channels[ch.to_sym] || fail!(format(ErrorMessages::UNKNOWN_CHANNEL, ch))) : ch
+      if validate_known_channel
+        profile.channels[ch.to_sym] or raise InvalidArgumentsError, format(ErrorMessages::UNKNOWN_CHANNEL, ch)
+      else
+        ch
+      end
     }
     expects :text, type: String, optional: true, preprocess: lambda { |txt|
       # Preserve blank strings so we can treat explicit blank text-only calls as no-ops

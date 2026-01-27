@@ -6,13 +6,13 @@ module SlackSender
       def self.included(base)
         base.before do
           done! if explicit_blank_text_only?
-          fail! ErrorMessages::NO_CONTENT_PROVIDED if content_blank?
-          fail! ErrorMessages::INVALID_BLOCKS if blocks.present? && !blocks_valid?
+          raise InvalidArgumentsError, ErrorMessages::NO_CONTENT_PROVIDED if content_blank?
+          raise InvalidArgumentsError, ErrorMessages::INVALID_BLOCKS if blocks.present? && !blocks_valid?
 
           if files.present?
-            fail! ErrorMessages::FILES_WITH_BLOCKS if blocks.present?
-            fail! ErrorMessages::FILES_WITH_ATTACHMENTS if attachments.present?
-            fail! ErrorMessages::FILES_WITH_ICON_EMOJI if icon_emoji.present?
+            raise InvalidArgumentsError, ErrorMessages::FILES_WITH_BLOCKS if blocks.present?
+            raise InvalidArgumentsError, ErrorMessages::FILES_WITH_ATTACHMENTS if attachments.present?
+            raise InvalidArgumentsError, ErrorMessages::FILES_WITH_ICON_EMOJI if icon_emoji.present?
           end
         end
       end

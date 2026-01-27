@@ -22,6 +22,10 @@ require_relative "slack_sender/error_messages"
 
 module SlackSender
   class Error < StandardError; end
+
+  # Raised for invalid arguments that should not be retried
+  # (e.g., missing content, invalid blocks, incompatible options)
+  class InvalidArgumentsError < Error; end
 end
 
 require_relative "slack_sender/profile"

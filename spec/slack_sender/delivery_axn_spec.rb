@@ -617,6 +617,104 @@ RSpec.describe SlackSender::DeliveryAxn do
     end
   end
 
+  describe "InvalidArgumentsError" do
+    describe "raises InvalidArgumentsError for validation failures" do
+      shared_examples "raises InvalidArgumentsError" do |error_message|
+        it "raises InvalidArgumentsError when using call!" do
+          expect { action_class.call!(profile:, **call_args) }.to raise_error(SlackSender::InvalidArgumentsError, error_message)
+        end
+
+        it "returns failed result with error message when using call" do
+          result = action_class.call(profile:, **call_args)
+          expect(result).not_to be_ok
+          expect(result.error).to eq(error_message)
+        end
+
+        it "captures the exception on the result" do
+          result = action_class.call(profile:, **call_args)
+          # The exception is either InvalidArgumentsError directly or PreprocessingError wrapping it
+          expect(result.exception).to be_a(StandardError)
+        end
+      end
+
+      context "when no content is provided" do
+        let(:call_args) { { channel: } }
+
+        include_examples "raises InvalidArgumentsError", "Must provide at least one of: text, blocks, attachments, or files"
+      end
+
+      context "when blocks are invalid" do
+        let(:call_args) { { channel:, blocks: [{ text: "missing type key" }] } }
+
+        include_examples "raises InvalidArgumentsError", "Provided blocks were invalid"
+      end
+
+      context "when files provided with blocks" do
+        let(:file) { StringIO.new("content") }
+        let(:call_args) { { channel:, files: [file], blocks: [{ type: "section" }] } }
+
+        before do
+          allow(client_dbl).to receive(:files_upload_v2)
+          allow(client_dbl).to receive(:files_info)
+        end
+
+        include_examples "raises InvalidArgumentsError", "Cannot provide files with blocks"
+      end
+
+      context "when files provided with attachments" do
+        let(:file) { StringIO.new("content") }
+        let(:call_args) { { channel:, files: [file], attachments: [{ color: "good" }] } }
+
+        before do
+          allow(client_dbl).to receive(:files_upload_v2)
+          allow(client_dbl).to receive(:files_info)
+        end
+
+        include_examples "raises InvalidArgumentsError", "Cannot provide files with attachments"
+      end
+
+      context "when files provided with icon_emoji" do
+        let(:file) { StringIO.new("content") }
+        let(:call_args) { { channel:, files: [file], icon_emoji: "robot" } }
+
+        before do
+          allow(client_dbl).to receive(:files_upload_v2)
+          allow(client_dbl).to receive(:files_info)
+        end
+
+        include_examples "raises InvalidArgumentsError", "Cannot provide files with icon_emoji"
+      end
+
+      context "when unknown channel with validate_known_channel: true" do
+        let(:call_args) { { channel: "unknown_channel", validate_known_channel: true, text: } }
+
+        it "raises InvalidArgumentsError (wrapped in PreprocessingError) when using call!" do
+          # Channel validation happens in preprocess, so it's wrapped in PreprocessingError
+          expect { action_class.call!(profile:, **call_args) }.to raise_error(Axn::ContractViolation::PreprocessingError) do |error|
+            expect(error.cause).to be_a(SlackSender::InvalidArgumentsError)
+            expect(error.cause.message).to include("Unknown channel provided: :unknown_channel")
+          end
+        end
+
+        it "returns failed result with unwrapped error message when using call" do
+          result = action_class.call(profile:, **call_args)
+          expect(result).not_to be_ok
+          expect(result.error).to include("Unknown channel provided: :unknown_channel")
+        end
+      end
+    end
+
+    describe "error class hierarchy" do
+      it "inherits from SlackSender::Error" do
+        expect(SlackSender::InvalidArgumentsError.superclass).to eq(SlackSender::Error)
+      end
+
+      it "inherits from StandardError" do
+        expect(SlackSender::InvalidArgumentsError.ancestors).to include(StandardError)
+      end
+    end
+  end
+
   describe "text_to_use" do
     subject(:result) { action_class.call(profile:, channel:, text: "Line 1\nLine 2\nLine 3") }
 

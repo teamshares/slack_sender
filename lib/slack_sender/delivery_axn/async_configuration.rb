@@ -17,14 +17,20 @@ module SlackSender
         case backend
         when :sidekiq
           async :sidekiq, retry: 5, dead: false
-          # Configure Sidekiq-specific retry logic
+          # Configure Sidekiq-specific retry logic (including skipping retries for InvalidArgumentsError)
           if defined?(Sidekiq::Job) && respond_to?(:sidekiq_retry_in)
             sidekiq_retry_in do |_count, exception|
+              # Don't retry invalid arguments
+              next :discard if exception.is_a?(SlackSender::InvalidArgumentsError)
+
               SlackSender::Util.parse_retry_delay_from_exception(exception)
             end
           end
         when :active_job
           async :active_job do
+            # Skip retries for invalid arguments - these will never succeed
+            discard_on SlackSender::InvalidArgumentsError
+
             retry_on StandardError, wait: :exponentially_longer, attempts: 5 do |_job, exception|
               retry_behavior = SlackSender::Util.parse_retry_delay_from_exception(exception)
               next if retry_behavior == :discard
