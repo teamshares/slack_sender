@@ -91,11 +91,25 @@ module SlackSender
               "SlackSender.config.async_backend to enable automatic retries for failed Slack sends."
       end
 
-      # Upload files to Slack synchronously, then pass file_ids to the background job.
-      # This avoids serializing large file contents to Redis while still enabling async delivery.
+      # Handle files for async delivery
       if kwargs[:files].present?
-        uploader = FileUploader.new(client, kwargs.delete(:files))
-        kwargs[:file_ids] = uploader.upload_to_slack
+        wrapped_files = MultiFileWrapper.new(kwargs.delete(:files))
+        total_size = wrapped_files.total_file_size
+
+        # Validate individual files against Slack's hard limit (1 GB per file)
+        validate_individual_file_sizes!(wrapped_files.files)
+
+        # Validate total size against async limit (abort early to avoid blocking web processes)
+        validate_async_file_size!(total_size)
+
+        if total_size <= SlackSender.config.max_inline_file_size
+          # Small files: serialize directly to job payload (skip sync Slack upload)
+          kwargs[:files] = wrapped_files.files
+        else
+          # Larger files: upload to Slack synchronously, pass file_ids to job
+          uploader = FileUploader.new(client, wrapped_files.files)
+          kwargs[:file_ids] = uploader.upload_to_slack
+        end
       end
 
       unless ProfileRegistry.all[key] == self
@@ -234,6 +248,25 @@ module SlackSender
       else
         value
       end
+    end
+
+    # File size validation for async uploads
+    def validate_individual_file_sizes!(files)
+      max_size = Configuration::SLACK_MAX_FILE_SIZE
+      files.each do |file|
+        next unless file.content.bytesize > max_size
+
+        raise Error, format(ErrorMessages::FILE_EXCEEDS_SLACK_LIMIT, file.filename, file.content.bytesize)
+      end
+    end
+
+    def validate_async_file_size!(total_size)
+      max_async_size = SlackSender.config.max_async_file_upload_size
+      return if max_async_size.nil? # nil means disabled
+
+      return unless total_size > max_async_size
+
+      raise Error, format(ErrorMessages::FILES_EXCEED_ASYNC_LIMIT, total_size, max_async_size)
     end
   end
 end

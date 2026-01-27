@@ -174,18 +174,18 @@ SlackSender.call(
 
 ### File Uploads
 
-File uploads are supported with synchronous delivery (`call!`). Note: file uploads are not yet supported with async delivery (feature planned post alpha release).
+File uploads are supported with both synchronous (`call!`) and async (`call`) delivery.
 
 ```ruby
-# Single file
+# Synchronous delivery (blocking)
 SlackSender.call!(
   channel: :alerts,
   text: "Here's the report",
   files: [File.open("report.pdf")]
 )
 
-# Multiple files
-SlackSender.call!(
+# Async delivery (background job handles sharing)
+SlackSender.call(
   channel: :alerts,
   text: "Multiple files attached",
   files: [
@@ -194,6 +194,19 @@ SlackSender.call!(
   ]
 )
 ```
+
+**Async file upload behavior:**
+
+- **Small files** (< `max_inline_file_size`, default 512 KB): Serialized directly to the job payload
+- **Larger files**: Uploaded to Slack's servers synchronously, then the background job shares them to the channel
+
+This means `call` with larger files may block briefly during the upload phase. The background job then handles sharing to the channel with automatic retry support for rate limits.
+
+**Size limits:**
+
+- Individual files cannot exceed **1 GB** (Slack's hard limit)
+- Total file size for async uploads is limited by `max_async_file_upload_size` (default 25 MB) to prevent blocking web processes on large uploads
+- Use `call!` for synchronous upload when you need to upload files larger than `max_async_file_upload_size`
 
 **Note**: Filenames are automatically detected from file objects. For custom filenames, use objects that respond to `original_filename` (e.g., ActionDispatch::Http::UploadedFile) or ensure the file path contains the desired filename.
 
@@ -339,6 +352,8 @@ end
 | `sandbox_default_behavior` | `Symbol` | `:noop` | Default behavior when in sandbox mode if profile doesn't specify. Options: `:noop`, `:redirect`, `:passthrough` |
 | `enabled` | `Boolean` | `true` | Global enable/disable flag. When `false`, `call` and `call!` return `false` without sending |
 | `silence_archived_channel_exceptions` | `Boolean` | `false` | If `true`, silently ignores `IsArchived` errors instead of reporting them |
+| `max_inline_file_size` | `Integer` | `524_288` (512 KB) | Max total file size to serialize directly to job payload. Files larger than this are uploaded to Slack first. |
+| `max_async_file_upload_size` | `Integer` or `nil` | `26_214_400` (25 MB) | Max total file size for async uploads. Exceeding raises error immediately. Set to `nil` to disable (only Slack's 1 GB limit applies). |
 
 #### Profile Configuration (`SlackSender.register`)
 
@@ -607,10 +622,22 @@ A: The bot must be invited to the channel. Options:
 
 ### Q: File uploads fail with async delivery
 
-A: File uploads are only supported with synchronous delivery (`call!`). This is a known limitation and will be addressed in a future release. Use `call!` for file uploads:
+A: File uploads with async delivery (`call`) are supported, but have size limits:
+
+- Files smaller than `max_inline_file_size` (default 512 KB) are serialized directly to the job
+- Larger files are uploaded to Slack synchronously, then shared via background job
+- Total file size cannot exceed `max_async_file_upload_size` (default 25 MB)
+
+If you're hitting the async size limit, either:
+1. Use `call!` for synchronous upload (no size limit except Slack's 1 GB per file)
+2. Increase `config.max_async_file_upload_size` (may block web processes longer)
 
 ```ruby
-SlackSender.call!(channel: :alerts, files: [file])
+# For large files, use synchronous delivery
+SlackSender.call!(channel: :alerts, files: [large_file])
+
+# Or increase the async limit
+SlackSender.config.max_async_file_upload_size = 100_000_000  # 100 MB
 ```
 
 ### Q: How do I disable SlackSender temporarily?
