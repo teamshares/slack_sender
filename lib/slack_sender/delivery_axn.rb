@@ -60,7 +60,6 @@ module SlackSender
 
     # Profile configs
     def slack_client_config = profile.slack_client_config
-    def error_channel = profile.error_channel
     def dev_channel = profile.dev_channel
 
     # Dev channel redirection

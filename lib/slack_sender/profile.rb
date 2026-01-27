@@ -2,15 +2,14 @@
 
 module SlackSender
   class Profile
-    attr_reader :dev_channel, :dev_user_group, :error_channel, :channels, :user_groups, :slack_client_config, :dev_channel_redirect_prefix, :key
+    attr_reader :dev_channel, :dev_user_group, :channels, :user_groups, :slack_client_config, :dev_channel_redirect_prefix, :key
 
-    def initialize(key:, token:, dev_channel: nil, dev_user_group: nil, error_channel: nil, channels: {}, user_groups: {}, slack_client_config: {},
+    def initialize(key:, token:, dev_channel: nil, dev_user_group: nil, channels: {}, user_groups: {}, slack_client_config: {},
                    dev_channel_redirect_prefix: nil)
       @key = key
       @token = token
       @dev_channel = dev_channel
       @dev_user_group = dev_user_group
-      @error_channel = error_channel
       @channels = channels.freeze
       @user_groups = user_groups.freeze
       @slack_client_config = slack_client_config.freeze

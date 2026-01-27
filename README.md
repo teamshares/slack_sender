@@ -62,7 +62,6 @@ SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
   dev_channel: 'C1234567890',  # Optional: redirect all messages here in non-production
   dev_user_group: 'S_DEV_GROUP',  # Optional: replace all group mentions here in non-production
-  error_channel: 'C0987654321', # Optional: receive error notifications here
   channels: {
     alerts: 'C1111111111',
     general: 'C2222222222',
@@ -330,7 +329,6 @@ end
 | `token` | `String` or callable | Required | Slack Bot User OAuth Token. Can be a proc/lambda for dynamic fetching |
 | `dev_channel` | `String` or `nil` | `nil` | Channel ID to redirect all messages in non-production |
 | `dev_user_group` | `String` or `nil` | `nil` | User group ID to replace all group mentions in non-production |
-| `error_channel` | `String` or `nil` | `nil` | Channel ID for configuration-related error notifications (NotInChannel, ChannelNotFound, IsArchived). Can be unset to avoid duplicate alerts (warnings will be logged instead) |
 | `channels` | `Hash` | `{}` | Hash mapping symbol keys to channel IDs (e.g., `{ alerts: 'C123' }`) |
 | `user_groups` | `Hash` | `{}` | Hash mapping symbol keys to user group IDs (e.g., `{ engineers: 'S123' }`) |
 | `slack_client_config` | `Hash` | `{}` | Additional options passed to `Slack::Web::Client` constructor |
@@ -384,13 +382,13 @@ SlackSender.register(
 
 ## Error Handling
 
-SlackSender automatically handles common Slack API errors:
+SlackSender automatically handles common Slack API errors by logging warnings and letting Axn's exception flow handle reporting:
 
-- **Not In Channel**: Sends error notification to `error_channel` (if configured), otherwise logs warning
-- **Channel Not Found**: Sends error notification to `error_channel` (if configured), otherwise logs warning
-- **Channel Is Archived**: Sends error notification to `error_channel` (if configured and `silence_archived_channel_exceptions` is false/nil), otherwise logs warning. Can be ignored via `config.silence_archived_channel_exceptions = true`
+- **Not In Channel**: Logs warning and re-raises (non-retryable)
+- **Channel Not Found**: Logs warning and re-raises (non-retryable)
+- **Channel Is Archived**: Logs warning and re-raises (non-retryable). Can be silently ignored via `config.silence_archived_channel_exceptions = true`
 - **Rate Limits**: Automatically retries with delay from `Retry-After` header (up to 5 retries)
-- **Other Errors**: Authentication and authorization errors (invalid_auth, token_revoked, missing_scope, etc.) log warnings but don't attempt Slack delivery (since they would fail)
+- **Other Slack API Errors**: Logs warning and re-raises
 
 For exception notifications to error tracking services (e.g., Honeybadger), configure Axn's `on_exception` handler. See [Axn configuration documentation](https://teamshares.github.io/axn/reference/configuration#on_exception) for details.
 
@@ -523,8 +521,7 @@ A: If `dev_channel` is configured, all messages are redirected there in non-prod
 
 A: The bot must be invited to the channel. Options:
 1. Invite the bot to the channel manually
-2. Configure `error_channel` to receive notifications about this error
-3. See: https://stackoverflow.com/a/68475477
+2. See: https://stackoverflow.com/a/68475477
 
 ### Q: File uploads fail with async delivery
 

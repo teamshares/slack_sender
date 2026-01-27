@@ -366,8 +366,6 @@ RSpec.describe SlackSender::DeliveryAxn do
       end
 
       context "when IsArchived error occurs during file upload" do
-        subject(:result) { action_class.call!(profile:, channel:, files:, text:) }
-
         before do
           allow(SlackSender.config).to receive(:in_production?).and_return(true)
           allow(client_dbl).to receive(:files_upload_v2).and_raise(
@@ -376,18 +374,14 @@ RSpec.describe SlackSender::DeliveryAxn do
         end
 
         context "when config.silence_archived_channel_exceptions is false" do
+          subject(:result) { action_class.call!(profile:, channel:, files:, text:) }
+
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(false)
-            call_count = 0
-            allow(client_dbl).to receive(:chat_postMessage) do |args|
-              call_count += 1
-              expect(args[:channel]).to eq(profile.error_channel)
-              expect(args[:text]).to include("Is Archived")
-              { "ts" => "123" }
-            end
           end
 
-          it "sends error notification to error_channel and re-raises" do
+          it "logs warning and re-raises" do
+            expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*Is Archived/m)
             expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
@@ -411,86 +405,30 @@ RSpec.describe SlackSender::DeliveryAxn do
         allow(SlackSender.config).to receive(:in_production?).and_return(true)
       end
 
-      shared_examples "channel error with notification" do |error_class, error_code, error_text|
+      shared_examples "channel error with warning" do |error_class, error_code, error_text|
         subject(:result) { action_class.call!(profile:, channel:, text:) }
 
-        it "sends error notification to error_channel and re-raises" do
-          error_channel = profile.error_channel
-          call_count = 0
+        before do
+          allow(client_dbl).to receive(:chat_postMessage).and_raise(
+            SlackErrorHelper.build(error_class, error_code),
+          )
+        end
 
-          allow(client_dbl).to receive(:chat_postMessage) do |args|
-            call_count += 1
-            raise SlackErrorHelper.build(error_class, error_code) if call_count == 1
-
-            expect(args[:channel]).to eq(error_channel)
-            expect(args[:text]).to include(error_text)
-            { "ts" => "123" }
-          end
-
+        it "logs warning and re-raises" do
+          expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*#{error_text}/m)
+          expect(client_dbl).to receive(:chat_postMessage).once
           expect { result }.to raise_error(error_class)
         end
       end
 
       context "when NotInChannel error occurs" do
-        include_examples "channel error with notification",
+        include_examples "channel error with warning",
                          Slack::Web::Api::Errors::NotInChannel, "not_in_channel", "Not In Channel"
       end
 
       context "when ChannelNotFound error occurs" do
-        include_examples "channel error with notification",
+        include_examples "channel error with warning",
                          Slack::Web::Api::Errors::ChannelNotFound, "channel_not_found", "Channel Not Found"
-      end
-
-      context "when error_channel is same as target channel" do
-        subject(:result) { action_class.call!(profile:, channel: profile.channels[:eng_alerts], text:) }
-
-        it "does not attempt recursive error notification" do
-          allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel"),
-          )
-
-          # Should only be called once (the original message, not error notification)
-          expect(client_dbl).to receive(:chat_postMessage).once
-
-          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-        end
-      end
-
-      context "when error_channel is nil" do
-        let(:profile_without_error_channel) { build(:profile, error_channel: nil) }
-        subject(:result) { action_class.call!(profile: profile_without_error_channel, channel:, text:) }
-
-        before do
-          allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel"),
-          )
-        end
-
-        it "logs warning instead of sending slack notification" do
-          expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED/)
-
-          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-        end
-      end
-
-      context "when error notification itself fails" do
-        subject(:result) { action_class.call!(profile:, channel:, text:) }
-
-        before do
-          call_count = 0
-          allow(client_dbl).to receive(:chat_postMessage) do
-            call_count += 1
-            raise SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel") if call_count == 1
-
-            raise StandardError, "error channel also failed"
-          end
-        end
-
-        it "logs warning when error notification fails" do
-          expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*WHILE REPORTING ERROR/m)
-
-          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-        end
       end
 
       context "when IsArchived error occurs" do
@@ -499,19 +437,13 @@ RSpec.describe SlackSender::DeliveryAxn do
         context "when config.silence_archived_channel_exceptions is false" do
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(false)
-            call_count = 0
-            is_archived_error = SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived")
-            allow(client_dbl).to receive(:chat_postMessage) do |args|
-              call_count += 1
-              raise is_archived_error if call_count == 1
-
-              expect(args[:channel]).to eq(profile.channels[:eng_alerts])
-              expect(args[:text]).to include("Is Archived")
-              { "ts" => "123" }
-            end
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(
+              SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived"),
+            )
           end
 
-          it "sends error notification to error_channel and re-raises" do
+          it "logs warning and re-raises" do
+            expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*Is Archived/m)
             expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
@@ -534,19 +466,13 @@ RSpec.describe SlackSender::DeliveryAxn do
         context "when config.silence_archived_channel_exceptions is nil" do
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(nil)
-            call_count = 0
-            is_archived_error = SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived")
-            allow(client_dbl).to receive(:chat_postMessage) do |args|
-              call_count += 1
-              raise is_archived_error if call_count == 1
-
-              expect(args[:channel]).to eq(profile.channels[:eng_alerts])
-              expect(args[:text]).to include("Is Archived")
-              { "ts" => "123" }
-            end
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(
+              SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived"),
+            )
           end
 
-          it "sends error notification to error_channel and re-raises" do
+          it "logs warning and re-raises" do
+            expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*Is Archived/m)
             expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
