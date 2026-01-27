@@ -98,6 +98,13 @@ RSpec.describe SlackSender::Profile do
         allow(SlackSender.config).to receive(:enabled).and_return(true)
       end
 
+      context "when text is explicitly provided but blank (and no other content keys are provided)" do
+        it "does not enqueue and returns false" do
+          expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
+          expect(profile.call(channel: "C123", text: "")).to be false
+        end
+      end
+
       it "calls DeliveryAxn.call_async with profile name" do
         expect(SlackSender::DeliveryAxn).to receive(:call_async).with(profile: "test_profile", channel: "C123", text: "test")
         profile.call(channel: "C123", text: "test")
@@ -438,6 +445,13 @@ RSpec.describe SlackSender::Profile do
     context "when config.enabled is true" do
       before do
         allow(SlackSender.config).to receive(:enabled).and_return(true)
+      end
+
+      context "when text is explicitly provided but blank (and no other content keys are provided)" do
+        it "does not send and returns false" do
+          expect(SlackSender::DeliveryAxn).not_to receive(:call!)
+          expect(profile.call!(channel: "C123", text: "")).to be false
+        end
       end
 
       it "calls DeliveryAxn.call! with profile" do

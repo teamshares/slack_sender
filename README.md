@@ -88,6 +88,8 @@ thread_ts = SlackSender.call!(
 )
 ```
 
+**Note:** If `text:` is explicitly provided but blank (and you did not provide `blocks`, `attachments`, or `files`), SlackSender treats it as a no-op and returns `false` (it will not enqueue a job and will not send anything to Slack).
+
 ## Usage
 
 ### Basic Messages

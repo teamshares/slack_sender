@@ -28,7 +28,9 @@ module SlackSender
       validate_known_channel ? (profile.channels[ch.to_sym] || fail!(format(ErrorMessages::UNKNOWN_CHANNEL, ch))) : ch
     }
     expects :text, type: String, optional: true, preprocess: lambda { |txt|
-      ::Slack::Messages::Formatting.markdown(txt) if txt.present?
+      # Preserve blank strings so we can treat explicit blank text-only calls as no-ops
+      # (rather than collapsing them into "no content provided").
+      txt.present? ? ::Slack::Messages::Formatting.markdown(txt) : txt
     }
     expects :icon_emoji, type: String, optional: true, preprocess: lambda { |raw|
       normalize_icon_emoji(raw)

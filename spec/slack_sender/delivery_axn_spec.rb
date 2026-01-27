@@ -144,6 +144,20 @@ RSpec.describe SlackSender::DeliveryAxn do
       end
     end
 
+    context "when text is explicitly provided but blank (and no other content keys are provided)" do
+      subject(:result) { action_class.call(profile:, channel:, text:) }
+
+      let(:text) { "" }
+
+      it "succeeds and does not call Slack" do
+        expect(client_dbl).not_to receive(:chat_postMessage)
+        expect(client_dbl).not_to receive(:files_upload_v2)
+
+        expect(result).to be_ok
+        expect(result.thread_ts).to be_nil
+      end
+    end
+
     context "when blocks are invalid" do
       subject(:result) { action_class.call(profile:, channel:, blocks:) }
 

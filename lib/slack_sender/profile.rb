@@ -71,10 +71,11 @@ module SlackSender
       @memoized_token ||= @token.call
     end
 
-    def enabled_and_preprocessed_kwargs(**)
+    def enabled_and_preprocessed_kwargs(**kwargs)
       return [false, nil] unless SlackSender.config.enabled
+      return [false, nil] if Util.blank_text_only?(kwargs)
 
-      [true, preprocess_call_kwargs(**)]
+      [true, preprocess_call_kwargs(kwargs)]
     end
 
     def preprocess_call_kwargs(raw)
