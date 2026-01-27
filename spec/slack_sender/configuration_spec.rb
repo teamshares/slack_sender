@@ -232,6 +232,82 @@ RSpec.describe SlackSender::Configuration do
       end
     end
   end
+
+  describe "#max_inline_file_size" do
+    it "defaults to 512 KB" do
+      expect(config.max_inline_file_size).to eq(524_288)
+    end
+
+    it "can be set to a custom value" do
+      config.max_inline_file_size = 1_000_000
+      expect(config.max_inline_file_size).to eq(1_000_000)
+    end
+
+    it "accepts zero" do
+      config.max_inline_file_size = 0
+      expect(config.max_inline_file_size).to eq(0)
+    end
+
+    it "raises ArgumentError for negative values" do
+      expect { config.max_inline_file_size = -1 }.to raise_error(
+        ArgumentError,
+        /max_inline_file_size must be a non-negative integer/,
+      )
+    end
+
+    it "raises ArgumentError for non-integer values" do
+      expect { config.max_inline_file_size = "100" }.to raise_error(
+        ArgumentError,
+        /max_inline_file_size must be a non-negative integer/,
+      )
+    end
+  end
+
+  describe "#max_async_file_upload_size" do
+    it "defaults to 25 MB" do
+      expect(config.max_async_file_upload_size).to eq(26_214_400)
+    end
+
+    it "can be set to a custom value" do
+      config.max_async_file_upload_size = 50_000_000
+      expect(config.max_async_file_upload_size).to eq(50_000_000)
+    end
+
+    it "accepts nil to disable the limit" do
+      config.max_async_file_upload_size = nil
+      expect(config.max_async_file_upload_size).to be_nil
+    end
+
+    it "accepts zero" do
+      config.max_async_file_upload_size = 0
+      expect(config.max_async_file_upload_size).to eq(0)
+    end
+
+    it "raises ArgumentError for negative values" do
+      expect { config.max_async_file_upload_size = -1 }.to raise_error(
+        ArgumentError,
+        /max_async_file_upload_size must be a non-negative integer or nil/,
+      )
+    end
+
+    it "raises ArgumentError when exceeding Slack's 1 GB limit" do
+      expect { config.max_async_file_upload_size = 2_000_000_000 }.to raise_error(
+        ArgumentError,
+        /cannot exceed Slack's maximum file size.*1 GB/,
+      )
+    end
+
+    it "accepts exactly Slack's 1 GB limit" do
+      config.max_async_file_upload_size = described_class::SLACK_MAX_FILE_SIZE
+      expect(config.max_async_file_upload_size).to eq(1_073_741_824)
+    end
+  end
+
+  describe "SLACK_MAX_FILE_SIZE constant" do
+    it "is 1 GB" do
+      expect(described_class::SLACK_MAX_FILE_SIZE).to eq(1_073_741_824)
+    end
+  end
 end
 
 RSpec.describe SlackSender do

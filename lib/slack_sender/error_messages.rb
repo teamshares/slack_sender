@@ -17,5 +17,10 @@ module SlackSender
     # Sandbox mode errors
     SANDBOX_REDIRECT_REQUIRES_CHANNEL = "Sandbox mode :redirect requires sandbox.channel.replace_with to be set"
     SANDBOX_NOOP_LOG = "[SANDBOX NOOP] Profile: %s | Channel: %s | Text: %s"
+
+    # File size errors
+    FILE_EXCEEDS_SLACK_LIMIT = "File '%s' (%s bytes) exceeds Slack's maximum file size of 1 GB"
+    FILES_EXCEED_ASYNC_LIMIT = "Total file size (%s bytes) exceeds max_async_file_upload_size (%s bytes). " \
+                               "Use SlackSender.call! for synchronous upload, or increase config.max_async_file_upload_size"
   end
 end
