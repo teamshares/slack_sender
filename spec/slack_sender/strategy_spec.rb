@@ -8,13 +8,13 @@ RSpec.describe SlackSender::Strategy do
     allow(Slack::Web::Client).to receive(:new).and_return(client_dbl)
     allow(client_dbl).to receive(:chat_postMessage).and_return({ "ts" => "1234567890.123456" })
     allow(SlackSender.config).to receive(:in_production?).and_return(true)
+    allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
 
     # Register test profile
     SlackSender::ProfileRegistry.register(:test_profile, {
                                             token: "test-token",
-                                            dev_channel: "C01H3KU3B9P",
-                                            error_channel: "C03F1DMJ4PM",
                                             channels: { slack_development: "C01H3KU3B9P", eng_alerts: "C03F1DMJ4PM" },
+                                            sandbox: { channel: { replace_with: "C01H3KU3B9P" } },
                                           })
   end
 
@@ -160,8 +160,8 @@ RSpec.describe SlackSender::Strategy do
       before do
         SlackSender::ProfileRegistry.register(:other_profile, {
                                                 token: "other-token",
-                                                dev_channel: "C_OTHER",
                                                 channels: { other_channel: "C_OTHER" },
+                                                sandbox: { channel: { replace_with: "C_OTHER" } },
                                               })
       end
 
@@ -188,13 +188,13 @@ RSpec.describe SlackSender::Strategy do
       before do
         SlackSender::ProfileRegistry.register(:profile_a, {
                                                 token: "token-a",
-                                                dev_channel: "C_DEV_A",
                                                 channels: { channel_a: "C_A" },
+                                                sandbox: { channel: { replace_with: "C_DEV_A" } },
                                               })
         SlackSender::ProfileRegistry.register(:profile_b, {
                                                 token: "token-b",
-                                                dev_channel: "C_DEV_B",
                                                 channels: { channel_b: "C_B" },
+                                                sandbox: { channel: { replace_with: "C_DEV_B" } },
                                               })
       end
 
