@@ -19,7 +19,7 @@ RSpec.describe SlackSender::DeliveryAxn do
   describe "expects" do
     describe "channel validation" do
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       context "with validate_known_channel: true and known channel name" do
@@ -70,7 +70,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
     describe "text preprocessing" do
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       context "with markdown text" do
@@ -96,7 +96,7 @@ RSpec.describe SlackSender::DeliveryAxn do
       subject(:result) { action_class.call(profile:, channel:, text:, icon_emoji:) }
 
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
       context "with emoji without colons" do
@@ -141,6 +141,20 @@ RSpec.describe SlackSender::DeliveryAxn do
       it "fails with error message" do
         expect(result).not_to be_ok
         expect(result.error).to eq("Must provide at least one of: text, blocks, attachments, or files")
+      end
+    end
+
+    context "when text is explicitly provided but blank (and no other content keys are provided)" do
+      subject(:result) { action_class.call(profile:, channel:, text:) }
+
+      let(:text) { "" }
+
+      it "succeeds and does not call Slack" do
+        expect(client_dbl).not_to receive(:chat_postMessage)
+        expect(client_dbl).not_to receive(:files_upload_v2)
+
+        expect(result).to be_ok
+        expect(result.thread_ts).to be_nil
       end
     end
 
@@ -223,7 +237,7 @@ RSpec.describe SlackSender::DeliveryAxn do
         subject(:result) { action_class.call(profile:, channel:, files:, text:) }
 
         before do
-          allow(SlackSender.config).to receive(:in_production?).and_return(true)
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
         end
 
         it "succeeds" do
@@ -243,11 +257,11 @@ RSpec.describe SlackSender::DeliveryAxn do
       let(:thread_ts) { nil }
 
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(production?)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(sandbox_mode?)
       end
 
-      context "in production" do
-        let(:production?) { true }
+      context "when not in sandbox mode (production)" do
+        let(:sandbox_mode?) { false }
 
         it "posts to actual channel with actual text" do
           expect(client_dbl).to receive(:chat_postMessage).with(
@@ -262,13 +276,13 @@ RSpec.describe SlackSender::DeliveryAxn do
         end
       end
 
-      context "not in production" do
-        let(:production?) { false }
+      context "when in sandbox mode (not production)" do
+        let(:sandbox_mode?) { true }
 
-        it "posts to dev channel with wrapped text" do
+        it "posts to sandbox channel with wrapped text" do
           expect(client_dbl).to receive(:chat_postMessage).with(
             hash_including(
-              channel: profile.channels[:slack_development],
+              channel: profile.sandbox_channel,
               text: a_string_matching(/:construction:.*This message would have been sent to.*#{channel}.*in production/m),
             ),
           )
@@ -276,13 +290,13 @@ RSpec.describe SlackSender::DeliveryAxn do
           expect(result).to be_ok
         end
 
-        context "with custom dev_channel_redirect_prefix" do
-          let(:profile) { build(:profile, dev_channel_redirect_prefix: "🚧 DEV MODE: Would have gone to %s 🚧") }
+        context "with custom sandbox channel message_prefix" do
+          let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C01H3KU3B9P", message_prefix: "🚧 DEV MODE: Would have gone to %s 🚧" } }) }
 
           it "uses custom prefix and formats channel_display correctly" do
             expect(client_dbl).to receive(:chat_postMessage).with(
               hash_including(
-                channel: profile.channels[:slack_development],
+                channel: profile.sandbox_channel,
                 text: a_string_matching(/🚧 DEV MODE: Would have gone to.*#{channel}.*🚧/m),
               ),
             )
@@ -302,7 +316,7 @@ RSpec.describe SlackSender::DeliveryAxn do
       before do
         file.write("file content")
         file.rewind
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
         allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "f_123" }] })
         allow(client_dbl).to receive(:files_info).and_return({
                                                                "file" => { "shares" => { "public" => { channel => [{ "ts" => "123.456" }] } } },
@@ -366,28 +380,22 @@ RSpec.describe SlackSender::DeliveryAxn do
       end
 
       context "when IsArchived error occurs during file upload" do
-        subject(:result) { action_class.call!(profile:, channel:, files:, text:) }
-
         before do
-          allow(SlackSender.config).to receive(:in_production?).and_return(true)
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
           allow(client_dbl).to receive(:files_upload_v2).and_raise(
             SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived"),
           )
         end
 
         context "when config.silence_archived_channel_exceptions is false" do
+          subject(:result) { action_class.call!(profile:, channel:, files:, text:) }
+
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(false)
-            call_count = 0
-            allow(client_dbl).to receive(:chat_postMessage) do |args|
-              call_count += 1
-              expect(args[:channel]).to eq(profile.error_channel)
-              expect(args[:text]).to include("Is Archived")
-              { "ts" => "123" }
-            end
           end
 
-          it "sends error notification to error_channel and re-raises" do
+          it "logs warning and re-raises" do
+            expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*Is Archived/m)
             expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
@@ -408,89 +416,33 @@ RSpec.describe SlackSender::DeliveryAxn do
 
     describe "error handling" do
       before do
-        allow(SlackSender.config).to receive(:in_production?).and_return(true)
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
-      shared_examples "channel error with notification" do |error_class, error_code, error_text|
+      shared_examples "channel error with warning" do |error_class, error_code, error_text|
         subject(:result) { action_class.call!(profile:, channel:, text:) }
 
-        it "sends error notification to error_channel and re-raises" do
-          error_channel = profile.error_channel
-          call_count = 0
+        before do
+          allow(client_dbl).to receive(:chat_postMessage).and_raise(
+            SlackErrorHelper.build(error_class, error_code),
+          )
+        end
 
-          allow(client_dbl).to receive(:chat_postMessage) do |args|
-            call_count += 1
-            raise SlackErrorHelper.build(error_class, error_code) if call_count == 1
-
-            expect(args[:channel]).to eq(error_channel)
-            expect(args[:text]).to include(error_text)
-            { "ts" => "123" }
-          end
-
+        it "logs warning and re-raises" do
+          expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*#{error_text}/m)
+          expect(client_dbl).to receive(:chat_postMessage).once
           expect { result }.to raise_error(error_class)
         end
       end
 
       context "when NotInChannel error occurs" do
-        include_examples "channel error with notification",
+        include_examples "channel error with warning",
                          Slack::Web::Api::Errors::NotInChannel, "not_in_channel", "Not In Channel"
       end
 
       context "when ChannelNotFound error occurs" do
-        include_examples "channel error with notification",
+        include_examples "channel error with warning",
                          Slack::Web::Api::Errors::ChannelNotFound, "channel_not_found", "Channel Not Found"
-      end
-
-      context "when error_channel is same as target channel" do
-        subject(:result) { action_class.call!(profile:, channel: profile.channels[:eng_alerts], text:) }
-
-        it "does not attempt recursive error notification" do
-          allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel"),
-          )
-
-          # Should only be called once (the original message, not error notification)
-          expect(client_dbl).to receive(:chat_postMessage).once
-
-          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-        end
-      end
-
-      context "when error_channel is nil" do
-        let(:profile_without_error_channel) { build(:profile, error_channel: nil) }
-        subject(:result) { action_class.call!(profile: profile_without_error_channel, channel:, text:) }
-
-        before do
-          allow(client_dbl).to receive(:chat_postMessage).and_raise(
-            SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel"),
-          )
-        end
-
-        it "logs warning instead of sending slack notification" do
-          expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED/)
-
-          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-        end
-      end
-
-      context "when error notification itself fails" do
-        subject(:result) { action_class.call!(profile:, channel:, text:) }
-
-        before do
-          call_count = 0
-          allow(client_dbl).to receive(:chat_postMessage) do
-            call_count += 1
-            raise SlackErrorHelper.build(Slack::Web::Api::Errors::NotInChannel, "not_in_channel") if call_count == 1
-
-            raise StandardError, "error channel also failed"
-          end
-        end
-
-        it "logs warning when error notification fails" do
-          expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*WHILE REPORTING ERROR/m)
-
-          expect { result }.to raise_error(Slack::Web::Api::Errors::NotInChannel)
-        end
       end
 
       context "when IsArchived error occurs" do
@@ -499,19 +451,13 @@ RSpec.describe SlackSender::DeliveryAxn do
         context "when config.silence_archived_channel_exceptions is false" do
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(false)
-            call_count = 0
-            is_archived_error = SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived")
-            allow(client_dbl).to receive(:chat_postMessage) do |args|
-              call_count += 1
-              raise is_archived_error if call_count == 1
-
-              expect(args[:channel]).to eq(profile.channels[:eng_alerts])
-              expect(args[:text]).to include("Is Archived")
-              { "ts" => "123" }
-            end
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(
+              SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived"),
+            )
           end
 
-          it "sends error notification to error_channel and re-raises" do
+          it "logs warning and re-raises" do
+            expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*Is Archived/m)
             expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
@@ -534,19 +480,13 @@ RSpec.describe SlackSender::DeliveryAxn do
         context "when config.silence_archived_channel_exceptions is nil" do
           before do
             allow(SlackSender.config).to receive(:silence_archived_channel_exceptions).and_return(nil)
-            call_count = 0
-            is_archived_error = SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived")
-            allow(client_dbl).to receive(:chat_postMessage) do |args|
-              call_count += 1
-              raise is_archived_error if call_count == 1
-
-              expect(args[:channel]).to eq(profile.channels[:eng_alerts])
-              expect(args[:text]).to include("Is Archived")
-              { "ts" => "123" }
-            end
+            allow(client_dbl).to receive(:chat_postMessage).and_raise(
+              SlackErrorHelper.build(Slack::Web::Api::Errors::IsArchived, "is_archived"),
+            )
           end
 
-          it "sends error notification to error_channel and re-raises" do
+          it "logs warning and re-raises" do
+            expect(action_class).to receive(:warn).with(/SLACK MESSAGE SEND FAILED.*Is Archived/m)
             expect { result }.to raise_error(Slack::Web::Api::Errors::IsArchived)
           end
         end
@@ -677,11 +617,109 @@ RSpec.describe SlackSender::DeliveryAxn do
     end
   end
 
+  describe "InvalidArgumentsError" do
+    describe "raises InvalidArgumentsError for validation failures" do
+      shared_examples "raises InvalidArgumentsError" do |error_message|
+        it "raises InvalidArgumentsError when using call!" do
+          expect { action_class.call!(profile:, **call_args) }.to raise_error(SlackSender::InvalidArgumentsError, error_message)
+        end
+
+        it "returns failed result with error message when using call" do
+          result = action_class.call(profile:, **call_args)
+          expect(result).not_to be_ok
+          expect(result.error).to eq(error_message)
+        end
+
+        it "captures the exception on the result" do
+          result = action_class.call(profile:, **call_args)
+          # The exception is either InvalidArgumentsError directly or PreprocessingError wrapping it
+          expect(result.exception).to be_a(StandardError)
+        end
+      end
+
+      context "when no content is provided" do
+        let(:call_args) { { channel: } }
+
+        include_examples "raises InvalidArgumentsError", "Must provide at least one of: text, blocks, attachments, or files"
+      end
+
+      context "when blocks are invalid" do
+        let(:call_args) { { channel:, blocks: [{ text: "missing type key" }] } }
+
+        include_examples "raises InvalidArgumentsError", "Provided blocks were invalid"
+      end
+
+      context "when files provided with blocks" do
+        let(:file) { StringIO.new("content") }
+        let(:call_args) { { channel:, files: [file], blocks: [{ type: "section" }] } }
+
+        before do
+          allow(client_dbl).to receive(:files_upload_v2)
+          allow(client_dbl).to receive(:files_info)
+        end
+
+        include_examples "raises InvalidArgumentsError", "Cannot provide files with blocks"
+      end
+
+      context "when files provided with attachments" do
+        let(:file) { StringIO.new("content") }
+        let(:call_args) { { channel:, files: [file], attachments: [{ color: "good" }] } }
+
+        before do
+          allow(client_dbl).to receive(:files_upload_v2)
+          allow(client_dbl).to receive(:files_info)
+        end
+
+        include_examples "raises InvalidArgumentsError", "Cannot provide files with attachments"
+      end
+
+      context "when files provided with icon_emoji" do
+        let(:file) { StringIO.new("content") }
+        let(:call_args) { { channel:, files: [file], icon_emoji: "robot" } }
+
+        before do
+          allow(client_dbl).to receive(:files_upload_v2)
+          allow(client_dbl).to receive(:files_info)
+        end
+
+        include_examples "raises InvalidArgumentsError", "Cannot provide files with icon_emoji"
+      end
+
+      context "when unknown channel with validate_known_channel: true" do
+        let(:call_args) { { channel: "unknown_channel", validate_known_channel: true, text: } }
+
+        it "raises InvalidArgumentsError (wrapped in PreprocessingError) when using call!" do
+          # Channel validation happens in preprocess, so it's wrapped in PreprocessingError
+          expect { action_class.call!(profile:, **call_args) }.to raise_error(Axn::ContractViolation::PreprocessingError) do |error|
+            expect(error.cause).to be_a(SlackSender::InvalidArgumentsError)
+            expect(error.cause.message).to include("Unknown channel provided: :unknown_channel")
+          end
+        end
+
+        it "returns failed result with unwrapped error message when using call" do
+          result = action_class.call(profile:, **call_args)
+          expect(result).not_to be_ok
+          expect(result.error).to include("Unknown channel provided: :unknown_channel")
+        end
+      end
+    end
+
+    describe "error class hierarchy" do
+      it "inherits from SlackSender::Error" do
+        expect(SlackSender::InvalidArgumentsError.superclass).to eq(SlackSender::Error)
+      end
+
+      it "inherits from StandardError" do
+        expect(SlackSender::InvalidArgumentsError.ancestors).to include(StandardError)
+      end
+    end
+  end
+
   describe "text_to_use" do
     subject(:result) { action_class.call(profile:, channel:, text: "Line 1\nLine 2\nLine 3") }
 
     before do
-      allow(SlackSender.config).to receive(:in_production?).and_return(false)
+      allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
     end
 
     it "wraps each line with quote formatting" do
@@ -708,8 +746,8 @@ RSpec.describe SlackSender::DeliveryAxn do
       end
     end
 
-    context "with custom dev_channel_redirect_prefix" do
-      let(:profile) { build(:profile, dev_channel_redirect_prefix: "Test prefix with %s replacement") }
+    context "with custom sandbox channel message_prefix" do
+      let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C01H3KU3B9P", message_prefix: "Test prefix with %s replacement" } }) }
 
       it "replaces %s with channel_display value" do
         expect(client_dbl).to receive(:chat_postMessage).with(
@@ -718,6 +756,126 @@ RSpec.describe SlackSender::DeliveryAxn do
           ),
         )
 
+        expect(result).to be_ok
+      end
+    end
+  end
+
+  describe "sandbox behavior" do
+    before do
+      allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+    end
+
+    describe "behavior :redirect" do
+      let(:profile) { build(:profile, sandbox: { behavior: :redirect, channel: { replace_with: "C_SANDBOX" } }) }
+
+      it "redirects message to sandbox channel" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(channel: "C_SANDBOX"),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+
+      it "adds prefix to message text" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(
+            text: a_string_matching(/would have been sent to.*in production/i),
+          ),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+    end
+
+    describe "behavior :noop" do
+      let(:profile) { build(:profile, sandbox: { behavior: :noop }) }
+
+      it "does not send message to Slack" do
+        expect(client_dbl).not_to receive(:chat_postMessage)
+        expect(client_dbl).not_to receive(:files_upload_v2)
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+
+      it "logs the noop action" do
+        expect(action_class).to receive(:info).with(/\[SANDBOX NOOP\].*Profile:.*Channel:.*Text:/i).at_least(:once)
+        allow(action_class).to receive(:info)
+
+        action_class.call(profile:, channel:, text:)
+      end
+
+      it "returns success message indicating noop" do
+        result = action_class.call(profile:, channel:, text:)
+        expect(result.success).to include("noop")
+      end
+    end
+
+    describe "behavior :passthrough" do
+      let(:profile) { build(:profile, sandbox: { behavior: :passthrough }) }
+
+      it "sends message to the actual channel" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(channel:),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+
+      it "does not modify the message text" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(text:),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
+        expect(result).to be_ok
+      end
+    end
+
+    describe "behavior resolution fallback" do
+      context "when profile has no sandbox config" do
+        let(:profile) { build(:profile, sandbox: {}) }
+
+        it "uses config.sandbox_default_behavior" do
+          allow(SlackSender.config).to receive(:sandbox_default_behavior).and_return(:noop)
+          expect(client_dbl).not_to receive(:chat_postMessage)
+
+          result = action_class.call(profile:, channel:, text:)
+          expect(result).to be_ok
+        end
+      end
+
+      context "when profile has channel.replace_with but no explicit behavior" do
+        let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C_INFERRED" } }) }
+
+        it "infers :redirect behavior" do
+          expect(client_dbl).to receive(:chat_postMessage).with(
+            hash_including(channel: "C_INFERRED"),
+          )
+
+          result = action_class.call(profile:, channel:, text:)
+          expect(result).to be_ok
+        end
+      end
+    end
+
+    describe "when sandbox_mode? is false" do
+      before do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+      end
+
+      let(:profile) { build(:profile, sandbox: { behavior: :noop }) }
+
+      it "ignores sandbox config and sends to real channel" do
+        expect(client_dbl).to receive(:chat_postMessage).with(
+          hash_including(channel:, text:),
+        )
+
+        result = action_class.call(profile:, channel:, text:)
         expect(result).to be_ok
       end
     end

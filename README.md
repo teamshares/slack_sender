@@ -60,15 +60,21 @@ Register a profile with your Slack token and channel configuration:
 ```ruby
 SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
-  dev_channel: 'C1234567890',  # Optional: redirect all messages here in non-production
-  dev_user_group: 'S_DEV_GROUP',  # Optional: replace all group mentions here in non-production
-  error_channel: 'C0987654321', # Optional: receive error notifications here
   channels: {
     alerts: 'C1111111111',
     general: 'C2222222222',
   },
   user_groups: {
     engineers: 'S1234567890',
+  },
+  sandbox: {  # Optional: redirect messages/mentions when in sandbox mode (non-production)
+    channel: {
+      replace_with: 'C1234567890',
+      message_prefix: ':construction: _This message would have been sent to %s in production_'
+    },
+    user_group: {
+      replace_with: 'S_DEV_GROUP'
+    }
   }
 )
 ```
@@ -88,6 +94,8 @@ thread_ts = SlackSender.call!(
   text: "Deployment completed successfully"
 )
 ```
+
+**Note:** If `text:` is explicitly provided but blank (and you did not provide `blocks`, `attachments`, or `files`), SlackSender treats it as a no-op and returns `false` (it will not enqueue a job and will not send anything to Slack).
 
 ## Usage
 
@@ -217,25 +225,27 @@ thread_ts = SlackSender.call!(
 
 ### User Group Mentions
 
-Format user group mentions (automatically redirects to `dev_user_group` in non-production):
+Format user group mentions (automatically redirects to sandbox user_group when in sandbox mode):
 
 ```ruby
 SlackSender.format_group_mention(:engineers)
 # => "<!subteam^S1234567890|@engineers>"
 ```
 
-If `dev_user_group` is configured and the app is not in production (per `config.in_production?`), `format_group_mention` will replace the requested group with the `dev_user_group` instead, similar to how `dev_channel` redirects channel messages:
+If `sandbox.user_group.replace_with` is configured and the app is in sandbox mode (per `config.sandbox_mode?`), `format_group_mention` will replace the requested group with the sandbox user_group instead, similar to how sandbox channel redirects messages:
 
 ```ruby
 SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
-  dev_user_group: 'S_DEV_GROUP',  # All group mentions use this in dev
   user_groups: {
-    engineers: 'S1234567890',  # Would be replaced with dev_user_group in non-production
+    engineers: 'S1234567890',  # Would be replaced with sandbox user_group in sandbox mode
+  },
+  sandbox: {
+    user_group: { replace_with: 'S_DEV_GROUP' }  # All group mentions use this in sandbox mode
   }
 )
 
-# In development, this returns the dev_user_group mention
+# In sandbox mode, this returns the sandbox user_group mention
 SlackSender.format_group_mention(:engineers)
 # => "<!subteam^S_DEV_GROUP>"
 ```
@@ -301,8 +311,14 @@ SlackSender.configure do |config|
   # Set async backend (auto-detects Sidekiq or ActiveJob if available)
   config.async_backend = :sidekiq  # or :active_job
 
-  # Set production mode (affects dev channel redirects)
-  config.in_production = Rails.env.production?
+  # Set sandbox mode (affects sandbox channel/user_group redirects)
+  # Defaults to true in non-production, false in production
+  config.sandbox_mode = !Rails.env.production?
+
+  # Set default sandbox behavior when sandbox_mode is true but profile
+  # doesn't specify a sandbox.mode or sandbox.channel.replace_with
+  # Options: :noop (default), :redirect, :passthrough
+  config.sandbox_default_behavior = :noop
 
   # Enable/disable SlackSender globally
   config.enabled = true
@@ -319,7 +335,8 @@ end
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `async_backend` | `Symbol` or `nil` | Auto-detected (`:sidekiq` or `:active_job` if available) | Backend for async delivery. Supported: `:sidekiq`, `:active_job` |
-| `in_production` | `Boolean` or `nil` | `Rails.env.production?` if Rails available, else `false` | Whether app is in production (affects dev channel redirects) |
+| `sandbox_mode` | `Boolean` or `nil` | `!Rails.env.production?` if Rails available, else `true` | Whether app is in sandbox mode (affects sandbox behavior) |
+| `sandbox_default_behavior` | `Symbol` | `:noop` | Default behavior when in sandbox mode if profile doesn't specify. Options: `:noop`, `:redirect`, `:passthrough` |
 | `enabled` | `Boolean` | `true` | Global enable/disable flag. When `false`, `call` and `call!` return `false` without sending |
 | `silence_archived_channel_exceptions` | `Boolean` | `false` | If `true`, silently ignores `IsArchived` errors instead of reporting them |
 
@@ -328,13 +345,35 @@ end
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `token` | `String` or callable | Required | Slack Bot User OAuth Token. Can be a proc/lambda for dynamic fetching |
-| `dev_channel` | `String` or `nil` | `nil` | Channel ID to redirect all messages in non-production |
-| `dev_user_group` | `String` or `nil` | `nil` | User group ID to replace all group mentions in non-production |
-| `error_channel` | `String` or `nil` | `nil` | Channel ID for configuration-related error notifications (NotInChannel, ChannelNotFound, IsArchived). Can be unset to avoid duplicate alerts (warnings will be logged instead) |
 | `channels` | `Hash` | `{}` | Hash mapping symbol keys to channel IDs (e.g., `{ alerts: 'C123' }`) |
 | `user_groups` | `Hash` | `{}` | Hash mapping symbol keys to user group IDs (e.g., `{ engineers: 'S123' }`) |
 | `slack_client_config` | `Hash` | `{}` | Additional options passed to `Slack::Web::Client` constructor |
-| `dev_channel_redirect_prefix` | `String` or `nil` | `":construction: _This message would have been sent to %s in production_"` | Custom prefix for dev channel redirects. Use `%s` placeholder for channel name |
+| `sandbox` | `Hash` | `{}` | Sandbox mode configuration (see below) |
+
+#### Sandbox Configuration (`sandbox:` option)
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `behavior` | `Symbol` or `nil` | Inferred (see below) | Explicit sandbox behavior: `:redirect`, `:noop`, or `:passthrough` |
+| `channel.replace_with` | `String` or `nil` | `nil` | Channel ID to redirect all messages when behavior is `:redirect` |
+| `channel.message_prefix` | `String` or `nil` | `":construction: _This message would have been sent to %s in production_"` | Custom prefix for sandbox channel redirects. Use `%s` placeholder for channel name |
+| `user_group.replace_with` | `String` or `nil` | `nil` | User group ID to replace all group mentions when in sandbox mode |
+
+#### Sandbox Behavior Resolution
+
+When `config.sandbox_mode?` is true, the effective sandbox behavior is determined by:
+
+1. **Explicit `sandbox.behavior`** — if set, use it
+2. **Inferred from `sandbox.channel.replace_with`** — if present, behavior is `:redirect`
+3. **Global default** — `config.sandbox_default_behavior` (defaults to `:noop`)
+
+| Behavior | Description |
+|----------|-------------|
+| `:redirect` | Redirect messages to `sandbox.channel.replace_with` (required). Adds message prefix. |
+| `:noop` | Don't send anything. Logs what would have been sent. Returns `false`. |
+| `:passthrough` | Send to real channel (explicit opt-out of sandbox safety). |
+
+**Note:** If `behavior: :redirect` is set but `channel.replace_with` is not provided, an `ArgumentError` is raised at profile registration.
 
 ### Exception Notifications
 
@@ -350,47 +389,88 @@ end
 
 See [Axn configuration documentation](https://teamshares.github.io/axn/reference/configuration#on_exception) for details.
 
-## Development Mode
+## Sandbox Mode
 
-In non-production environments, messages are automatically redirected to the `dev_channel` if configured:
+When `config.sandbox_mode?` is true (default in non-production), SlackSender applies sandbox behavior based on the profile's `sandbox` configuration.
+
+### Mode: Redirect
+
+Redirect all messages to a sandbox channel:
 
 ```ruby
 SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
-  dev_channel: 'C1234567890',  # All messages go here in dev
   channels: {
-    production_alerts: 'C9999999999'  # Would redirect to dev_channel
+    production_alerts: 'C9999999999'
+  },
+  sandbox: {
+    behavior: :redirect,  # Optional - inferred when channel.replace_with is set
+    channel: {
+      replace_with: 'C1234567890',
+      message_prefix: '🚧 Sandbox redirect from %s'  # Optional custom prefix
+    }
   }
 )
 
-# In development, this goes to dev_channel with a prefix
-SlackSender.call(
-  channel: :production_alerts,
-  text: "Critical alert"
-)
-# => Sent to C1234567890 with prefix: "This message would have been sent to #production_alerts in production"
+# In sandbox mode, this goes to C1234567890 with a prefix
+SlackSender.call(channel: :production_alerts, text: "Critical alert")
 ```
 
-Customize the redirect prefix:
+### Mode: Noop (Default)
+
+Don't send anything, just log what would have been sent:
 
 ```ruby
 SlackSender.register(
   token: ENV['SLACK_BOT_TOKEN'],
-  dev_channel: 'C1234567890',
-  dev_channel_redirect_prefix: "🚧 Dev redirect: %s",
-  channels: { alerts: 'C999' }
+  channels: { alerts: 'C999' },
+  sandbox: { behavior: :noop }
 )
+
+# In sandbox mode, this logs the message but doesn't send to Slack
+SlackSender.call(channel: :alerts, text: "Test message")
+# => Logs: "[SANDBOX NOOP] Profile: default | Channel: <#C999> | Text: Test message"
+# => Returns false
 ```
+
+If no `sandbox` config is provided, the global `config.sandbox_default_behavior` is used (defaults to `:noop`).
+
+### Mode: Passthrough
+
+Explicitly opt out of sandbox safety and send to real channels:
+
+```ruby
+SlackSender.register(
+  token: ENV['SLACK_BOT_TOKEN'],
+  channels: { alerts: 'C999' },
+  sandbox: { behavior: :passthrough }
+)
+
+# In sandbox mode, this still sends to the real channel
+SlackSender.call(channel: :alerts, text: "This goes to production!")
+```
+
+### Global Default Behavior
+
+Set the default sandbox behavior for profiles that don't specify a behavior:
+
+```ruby
+SlackSender.configure do |config|
+  config.sandbox_default_behavior = :noop  # :noop, :redirect, or :passthrough
+end
+```
+
+**Note:** Setting `:redirect` as the global default will raise an error at send time if the profile doesn't have `sandbox.channel.replace_with` configured.
 
 ## Error Handling
 
-SlackSender automatically handles common Slack API errors:
+SlackSender automatically handles common Slack API errors by logging warnings and letting Axn's exception flow handle reporting:
 
-- **Not In Channel**: Sends error notification to `error_channel` (if configured), otherwise logs warning
-- **Channel Not Found**: Sends error notification to `error_channel` (if configured), otherwise logs warning
-- **Channel Is Archived**: Sends error notification to `error_channel` (if configured and `silence_archived_channel_exceptions` is false/nil), otherwise logs warning. Can be ignored via `config.silence_archived_channel_exceptions = true`
+- **Not In Channel**: Logs warning and re-raises (non-retryable)
+- **Channel Not Found**: Logs warning and re-raises (non-retryable)
+- **Channel Is Archived**: Logs warning and re-raises (non-retryable). Can be silently ignored via `config.silence_archived_channel_exceptions = true`
 - **Rate Limits**: Automatically retries with delay from `Retry-After` header (up to 5 retries)
-- **Other Errors**: Authentication and authorization errors (invalid_auth, token_revoked, missing_scope, etc.) log warnings but don't attempt Slack delivery (since they would fail)
+- **Other Slack API Errors**: Logs warning and re-raises
 
 For exception notifications to error tracking services (e.g., Honeybadger), configure Axn's `on_exception` handler. See [Axn configuration documentation](https://teamshares.github.io/axn/reference/configuration#on_exception) for details.
 
@@ -514,17 +594,16 @@ A: Check the following:
 
 ### Q: Messages work in production but not in development
 
-A: If `dev_channel` is configured, all messages are redirected there in non-production. Check:
-1. `SlackSender.config.in_production?` - should be `false` in development
-2. Your `dev_channel` channel ID is correct
-3. The bot is invited to the `dev_channel`
+A: If sandbox channel is configured, all messages are redirected there when in sandbox mode. Check:
+1. `SlackSender.config.sandbox_mode?` - should be `true` in development
+2. Your `sandbox.channel.replace_with` channel ID is correct
+3. The bot is invited to the sandbox channel
 
 ### Q: Getting "NotInChannel" errors
 
 A: The bot must be invited to the channel. Options:
 1. Invite the bot to the channel manually
-2. Configure `error_channel` to receive notifications about this error
-3. See: https://stackoverflow.com/a/68475477
+2. See: https://stackoverflow.com/a/68475477
 
 ### Q: File uploads fail with async delivery
 

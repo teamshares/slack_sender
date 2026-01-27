@@ -13,6 +13,21 @@ module SlackSender
       NON_RETRYABLE_CHANNEL_ERRORS.any? { |klass| exception.is_a?(klass) }
     end
 
+    # Checks if kwargs represent an explicit blank text-only call (no other content keys).
+    # Used to treat such calls as no-ops rather than errors.
+    # @param kwargs [Hash] The keyword arguments to check
+    # @return [Boolean] true if text is the only content key and is blank
+    def self.blank_text_only?(kwargs)
+      # Check for presence (not just key existence) since provided_data may include
+      # empty arrays from defaults
+      kwargs.key?(:text) &&
+        kwargs[:text].is_a?(String) &&
+        kwargs[:text].blank? &&
+        kwargs[:blocks].blank? &&
+        kwargs[:attachments].blank? &&
+        kwargs[:files].blank?
+    end
+
     # Determines retry behavior for Slack API exceptions
     # @param exception [Exception] The exception that occurred
     # @return [Symbol, Integer, nil] :discard to skip retry, Integer (seconds) for custom delay, nil for default retry

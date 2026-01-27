@@ -3,23 +3,37 @@
 module SlackSender
   class Configuration
     SUPPORTED_ASYNC_BACKENDS = %i[sidekiq active_job].freeze
+    SUPPORTED_SANDBOX_BEHAVIORS = %i[noop redirect passthrough].freeze
 
-    attr_writer :in_production
+    attr_writer :sandbox_mode
     attr_accessor :enabled, :silence_archived_channel_exceptions
 
     def initialize
       # Default values
       @enabled = true
+      @sandbox_default_behavior = :noop
     end
 
-    def in_production?
-      return @in_production unless @in_production.nil?
+    def sandbox_mode?
+      return @sandbox_mode unless @sandbox_mode.nil?
 
       if defined?(Rails) && Rails.respond_to?(:env)
-        Rails.env.production?
+        !Rails.env.production?
       else
-        false
+        true
       end
+    end
+
+    attr_reader :sandbox_default_behavior
+
+    def sandbox_default_behavior=(value)
+      unless SUPPORTED_SANDBOX_BEHAVIORS.include?(value)
+        raise ArgumentError,
+              "Unsupported sandbox behavior: #{value.inspect}. " \
+              "Supported behaviors: #{SUPPORTED_SANDBOX_BEHAVIORS.inspect}"
+      end
+
+      @sandbox_default_behavior = value
     end
 
     def async_backend

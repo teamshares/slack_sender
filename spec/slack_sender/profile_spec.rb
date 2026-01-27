@@ -38,50 +38,124 @@ RSpec.describe SlackSender::Profile do
     end
   end
 
-  describe "#dev_channel" do
-    context "when dev_channel is provided" do
-      it "returns the dev_channel value" do
-        expect(profile.dev_channel).to eq("C01H3KU3B9P")
+  describe "#sandbox_channel" do
+    context "when sandbox channel is provided" do
+      it "returns the sandbox channel value" do
+        expect(profile.sandbox_channel).to eq("C01H3KU3B9P")
       end
     end
 
-    context "when dev_channel is nil" do
-      let(:profile) { build(:profile, dev_channel: nil) }
+    context "when sandbox is empty" do
+      let(:profile) { build(:profile, sandbox: {}) }
 
       it "returns nil" do
-        expect(profile.dev_channel).to be_nil
+        expect(profile.sandbox_channel).to be_nil
       end
     end
   end
 
-  describe "#dev_user_group" do
-    context "when dev_user_group is provided" do
-      let(:profile) { build(:profile, dev_user_group: "S_DEV_GROUP") }
+  describe "#sandbox_user_group" do
+    context "when sandbox user_group is provided" do
+      let(:profile) { build(:profile, sandbox: { user_group: { replace_with: "S_DEV_GROUP" } }) }
 
-      it "returns the dev_user_group value" do
-        expect(profile.dev_user_group).to eq("S_DEV_GROUP")
+      it "returns the sandbox user_group value" do
+        expect(profile.sandbox_user_group).to eq("S_DEV_GROUP")
       end
     end
 
-    context "when dev_user_group is nil" do
+    context "when sandbox user_group is not provided" do
       it "returns nil" do
-        expect(profile.dev_user_group).to be_nil
+        expect(profile.sandbox_user_group).to be_nil
       end
     end
   end
 
-  describe "#dev_channel_redirect_prefix" do
-    context "when dev_channel_redirect_prefix is provided" do
-      let(:profile) { build(:profile, dev_channel_redirect_prefix: "Custom prefix: %s") }
+  describe "#sandbox_channel_message_prefix" do
+    context "when sandbox channel message_prefix is provided" do
+      let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C123", message_prefix: "Custom prefix: %s" } }) }
 
-      it "returns the dev_channel_redirect_prefix value" do
-        expect(profile.dev_channel_redirect_prefix).to eq("Custom prefix: %s")
+      it "returns the sandbox channel message_prefix value" do
+        expect(profile.sandbox_channel_message_prefix).to eq("Custom prefix: %s")
       end
     end
 
-    context "when dev_channel_redirect_prefix is nil" do
+    context "when sandbox channel message_prefix is not provided" do
       it "returns nil" do
-        expect(profile.dev_channel_redirect_prefix).to be_nil
+        expect(profile.sandbox_channel_message_prefix).to be_nil
+      end
+    end
+  end
+
+  describe "#resolved_sandbox_behavior" do
+    context "when sandbox.behavior is explicitly set" do
+      let(:profile) { build(:profile, sandbox: { behavior: :passthrough }) }
+
+      it "returns the explicit behavior" do
+        expect(profile.resolved_sandbox_behavior).to eq(:passthrough)
+      end
+    end
+
+    context "when sandbox.behavior is not set but channel.replace_with is present" do
+      let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C123" } }) }
+
+      it "infers :redirect" do
+        expect(profile.resolved_sandbox_behavior).to eq(:redirect)
+      end
+    end
+
+    context "when neither behavior nor channel.replace_with is set" do
+      let(:profile) { build(:profile, sandbox: {}) }
+
+      it "falls back to config.sandbox_default_behavior" do
+        allow(SlackSender.config).to receive(:sandbox_default_behavior).and_return(:noop)
+        expect(profile.resolved_sandbox_behavior).to eq(:noop)
+      end
+
+      it "respects different config.sandbox_default_behavior values" do
+        allow(SlackSender.config).to receive(:sandbox_default_behavior).and_return(:passthrough)
+        expect(profile.resolved_sandbox_behavior).to eq(:passthrough)
+      end
+    end
+  end
+
+  describe "sandbox configuration validation" do
+    context "when behavior is :redirect without channel.replace_with" do
+      it "raises ArgumentError at initialization" do
+        expect do
+          build(:profile, sandbox: { behavior: :redirect })
+        end.to raise_error(ArgumentError, /requires sandbox.channel.replace_with/)
+      end
+    end
+
+    context "when behavior is :redirect with channel.replace_with" do
+      it "does not raise an error" do
+        expect do
+          build(:profile, sandbox: { behavior: :redirect, channel: { replace_with: "C123" } })
+        end.not_to raise_error
+      end
+    end
+
+    context "when behavior is :noop without channel.replace_with" do
+      it "does not raise an error" do
+        expect do
+          build(:profile, sandbox: { behavior: :noop })
+        end.not_to raise_error
+      end
+    end
+
+    context "when behavior is :passthrough" do
+      it "does not raise an error" do
+        expect do
+          build(:profile, sandbox: { behavior: :passthrough })
+        end.not_to raise_error
+      end
+    end
+
+    context "when behavior is unsupported" do
+      it "raises ArgumentError" do
+        expect do
+          build(:profile, sandbox: { behavior: :invalid_behavior })
+        end.to raise_error(ArgumentError, /Unsupported sandbox behavior: :invalid_behavior/)
       end
     end
   end
@@ -96,6 +170,13 @@ RSpec.describe SlackSender::Profile do
     context "when config.enabled is true" do
       before do
         allow(SlackSender.config).to receive(:enabled).and_return(true)
+      end
+
+      context "when text is explicitly provided but blank (and no other content keys are provided)" do
+        it "does not enqueue and returns false" do
+          expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
+          expect(profile.call(channel: "C123", text: "")).to be false
+        end
       end
 
       it "calls DeliveryAxn.call_async with profile name" do
@@ -320,8 +401,8 @@ RSpec.describe SlackSender::Profile do
       end
 
       context "with profile parameter" do
-        let(:default_profile_attrs) { { token: "DEFAULT_TOKEN", dev_channel: "C_DEFAULT" } }
-        let(:other_profile_attrs) { { token: "OTHER_TOKEN", dev_channel: "C_OTHER" } }
+        let(:default_profile_attrs) { { token: "DEFAULT_TOKEN", sandbox: { channel: { replace_with: "C_DEFAULT" } } } }
+        let(:other_profile_attrs) { { token: "OTHER_TOKEN", sandbox: { channel: { replace_with: "C_OTHER" } } } }
         let(:default_profile) { SlackSender.register(**default_profile_attrs) }
         let(:other_profile) { SlackSender.register(:other_profile, **other_profile_attrs) }
 
@@ -440,6 +521,13 @@ RSpec.describe SlackSender::Profile do
         allow(SlackSender.config).to receive(:enabled).and_return(true)
       end
 
+      context "when text is explicitly provided but blank (and no other content keys are provided)" do
+        it "does not send and returns false" do
+          expect(SlackSender::DeliveryAxn).not_to receive(:call!)
+          expect(profile.call!(channel: "C123", text: "")).to be false
+        end
+      end
+
       it "calls DeliveryAxn.call! with profile" do
         expect(SlackSender::DeliveryAxn).to receive(:call!).with(profile:, channel: "C123", text: "test").and_return(result)
         expect(profile.call!(channel: "C123", text: "test")).to eq("123.456")
@@ -521,8 +609,8 @@ RSpec.describe SlackSender::Profile do
       end
 
       context "with profile parameter" do
-        let(:default_profile_attrs) { { token: "DEFAULT_TOKEN", dev_channel: "C_DEFAULT" } }
-        let(:other_profile_attrs) { { token: "OTHER_TOKEN", dev_channel: "C_OTHER" } }
+        let(:default_profile_attrs) { { token: "DEFAULT_TOKEN", sandbox: { channel: { replace_with: "C_DEFAULT" } } } }
+        let(:other_profile_attrs) { { token: "OTHER_TOKEN", sandbox: { channel: { replace_with: "C_OTHER" } } } }
         let(:default_profile) { SlackSender.register(**default_profile_attrs) }
         let(:other_profile) { SlackSender.register(:other_profile, **other_profile_attrs) }
 
@@ -629,11 +717,11 @@ RSpec.describe SlackSender::Profile do
 
   describe "#format_group_mention" do
     before do
-      allow(SlackSender.config).to receive(:in_production?).and_return(production?)
+      allow(SlackSender.config).to receive(:sandbox_mode?).and_return(sandbox_mode?)
     end
 
-    context "in production" do
-      let(:production?) { true }
+    context "when not in sandbox mode (production)" do
+      let(:sandbox_mode?) { false }
 
       context "with symbol key" do
         let(:profile) { build(:profile, user_groups: { eng_team: "S123ABC" }) }
@@ -653,10 +741,10 @@ RSpec.describe SlackSender::Profile do
         end
       end
 
-      context "with dev_user_group configured" do
-        let(:profile) { build(:profile, dev_user_group: "S_DEV_GROUP", user_groups: { eng_team: "S123ABC" }) }
+      context "with sandbox user_group configured" do
+        let(:profile) { build(:profile, sandbox: { user_group: { replace_with: "S_DEV_GROUP" } }, user_groups: { eng_team: "S123ABC" }) }
 
-        it "ignores dev_user_group and returns requested group link" do
+        it "ignores sandbox user_group and returns requested group link" do
           result = profile.format_group_mention(:eng_team)
 
           expect(result).to eq("<!subteam^S123ABC>")
@@ -670,14 +758,14 @@ RSpec.describe SlackSender::Profile do
       end
     end
 
-    context "not in production" do
-      let(:production?) { false }
+    context "when in sandbox mode (not production)" do
+      let(:sandbox_mode?) { true }
 
-      context "with dev_user_group configured" do
-        let(:profile) { build(:profile, dev_user_group: "S_DEV_GROUP", user_groups: { eng_team: "S123ABC" }) }
+      context "with sandbox user_group configured" do
+        let(:profile) { build(:profile, sandbox: { user_group: { replace_with: "S_DEV_GROUP" } }, user_groups: { eng_team: "S123ABC" }) }
 
         context "with symbol key" do
-          it "returns dev_user_group link instead of requested group" do
+          it "returns sandbox user_group link instead of requested group" do
             result = profile.format_group_mention(:eng_team)
 
             expect(result).to eq("<!subteam^S_DEV_GROUP>")
@@ -685,7 +773,7 @@ RSpec.describe SlackSender::Profile do
         end
 
         context "with string ID" do
-          it "returns dev_user_group link instead of requested ID" do
+          it "returns sandbox user_group link instead of requested ID" do
             result = profile.format_group_mention("S123ABC")
 
             expect(result).to eq("<!subteam^S_DEV_GROUP>")
@@ -693,20 +781,10 @@ RSpec.describe SlackSender::Profile do
         end
       end
 
-      context "when dev_user_group is not configured" do
-        let(:profile) { build(:profile, dev_user_group: nil, user_groups: { eng_team: "S123ABC" }) }
+      context "when sandbox user_group is not configured" do
+        let(:profile) { build(:profile, sandbox: {}, user_groups: { eng_team: "S123ABC" }) }
 
         it "returns the requested group link" do
-          result = profile.format_group_mention(:eng_team)
-
-          expect(result).to eq("<!subteam^S123ABC>")
-        end
-      end
-
-      context "when dev_user_group is empty string" do
-        let(:profile) { build(:profile, dev_user_group: "", user_groups: { eng_team: "S123ABC" }) }
-
-        it "returns the requested group link (empty string is not present)" do
           result = profile.format_group_mention(:eng_team)
 
           expect(result).to eq("<!subteam^S123ABC>")

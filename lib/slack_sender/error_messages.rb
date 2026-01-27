@@ -9,9 +9,13 @@ module SlackSender
     FILES_WITH_ATTACHMENTS = "Cannot provide files with attachments"
     FILES_WITH_ICON_EMOJI = "Cannot provide files with icon_emoji"
     UNKNOWN_CHANNEL = "Unknown channel provided: :%s"
-    DEFAULT_DEV_CHANNEL_REDIRECT_PREFIX = ":construction: _This message would have been sent to %s in production_"
+    DEFAULT_SANDBOX_CHANNEL_MESSAGE_PREFIX = ":construction: _This message would have been sent to %s in production_"
     PROFILE_UNREGISTERED = "Cannot specify profile: :%s when calling on unregistered profile. " \
                            "Register the profile first with SlackSender.register(name, config)"
     PROFILE_MISMATCH = "Cannot specify profile: :%s when calling on profile :%s. Use SlackSender.profile(:%s).call(...) instead"
+
+    # Sandbox mode errors
+    SANDBOX_REDIRECT_REQUIRES_CHANNEL = "Sandbox mode :redirect requires sandbox.channel.replace_with to be set"
+    SANDBOX_NOOP_LOG = "[SANDBOX NOOP] Profile: %s | Channel: %s | Text: %s"
   end
 end

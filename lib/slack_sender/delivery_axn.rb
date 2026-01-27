@@ -17,6 +17,11 @@ module SlackSender
     include ErrorMessageParsing
     include Validation
 
+    # Expose InvalidArgumentsError message directly (these errors skip retries)
+    # Handle both direct raises and raises from preprocess lambdas (wrapped in PreprocessingError)
+    error(if: InvalidArgumentsError, &:message)
+    error(if: ->(exception:) { exception.is_a?(Axn::ContractViolation::PreprocessingError) && exception.cause.is_a?(InvalidArgumentsError) }) { |e| e.cause.message }
+
     expects :profile, type: Profile, preprocess: lambda { |p|
       # If given a string/symbol (profile name), look it up in the registry
       # Otherwise, assume it's already a Profile object
@@ -25,10 +30,14 @@ module SlackSender
     expects :validate_known_channel, type: :boolean, default: false
     expects :channel, type: String, preprocess: lambda { |ch|
       # NOTE: symbols are preprocessed to strings in Profile#preprocess_call_kwargs
-      validate_known_channel ? (profile.channels[ch.to_sym] || fail!(format(ErrorMessages::UNKNOWN_CHANNEL, ch))) : ch
+      return ch unless validate_known_channel
+
+      profile.channels[ch.to_sym] or raise InvalidArgumentsError, format(ErrorMessages::UNKNOWN_CHANNEL, ch)
     }
     expects :text, type: String, optional: true, preprocess: lambda { |txt|
-      ::Slack::Messages::Formatting.markdown(txt) if txt.present?
+      # Preserve blank strings so we can treat explicit blank text-only calls as no-ops
+      # (rather than collapsing them into "no content provided").
+      txt.present? ? ::Slack::Messages::Formatting.markdown(txt) : txt
     }
     expects :icon_emoji, type: String, optional: true, preprocess: lambda { |raw|
       normalize_icon_emoji(raw)
@@ -43,6 +52,9 @@ module SlackSender
     exposes :thread_ts, type: String, optional: true
 
     def call
+      # Handle sandbox mode behavior
+      return handle_sandbox_noop if sandbox_noop?
+
       files.present? ? upload_files : post_message
     rescue Slack::Web::Api::Errors::IsArchived => e
       raise(e) unless SlackSender.config.silence_archived_channel_exceptions
@@ -60,28 +72,48 @@ module SlackSender
 
     # Profile configs
     def slack_client_config = profile.slack_client_config
-    def error_channel = profile.error_channel
-    def dev_channel = profile.dev_channel
+    def sandbox_channel = profile.sandbox_channel
 
-    # Dev channel redirection
-    memo def channel_to_use = redirect_to_dev_channel? ? dev_channel : channel
+    # Sandbox behavior handling
+    def effective_sandbox_behavior
+      return nil unless SlackSender.config.sandbox_mode?
+
+      profile.resolved_sandbox_behavior
+    end
+
+    def sandbox_noop? = effective_sandbox_behavior == :noop
+    def sandbox_redirect? = effective_sandbox_behavior == :redirect
+    def sandbox_passthrough? = effective_sandbox_behavior == :passthrough || effective_sandbox_behavior.nil?
+
+    def handle_sandbox_noop
+      log_sandbox_noop
+      done! "Sandbox mode :noop - message not sent"
+    end
+
+    def log_sandbox_noop
+      text_preview = text.to_s.truncate(100)
+      log_message = format(ErrorMessages::SANDBOX_NOOP_LOG, profile.key, channel_display, text_preview)
+      self.class.info(log_message)
+    end
+
+    # Channel resolution
+    memo def channel_to_use = sandbox_redirect? ? sandbox_channel : channel
     memo def text_to_use
-      return text unless redirect_to_dev_channel?
+      return text unless sandbox_redirect?
 
       formatted_message = text&.lines&.map { |line| "> #{line}" }&.join
 
       [
-        dev_channel_redirect_prefix,
+        sandbox_channel_message_prefix,
         formatted_message,
       ].compact_blank.join("\n\n")
     end
 
-    # Dev channel redirection - helpers
-    def redirect_to_dev_channel? = dev_channel.present? && !SlackSender.config.in_production?
+    # Sandbox channel redirection - helpers
     def channel_display = channel_id?(channel) ? Slack::Messages::Formatting.channel_link(channel) : "`#{channel}`"
 
-    def dev_channel_redirect_prefix
-      format(profile.dev_channel_redirect_prefix.presence || ErrorMessages::DEFAULT_DEV_CHANNEL_REDIRECT_PREFIX,
+    def sandbox_channel_message_prefix
+      format(profile.sandbox_channel_message_prefix.presence || ErrorMessages::DEFAULT_SANDBOX_CHANNEL_MESSAGE_PREFIX,
              channel_display)
     end
 

@@ -9,17 +9,17 @@ RSpec.describe SlackSender::ProfileRegistry do
     it "registers a profile with the given name" do
       profile = described_class.register(:test_profile,
                                          token: "TEST_TOKEN",
-                                         dev_channel: "C123")
+                                         sandbox: { channel: { replace_with: "C123" } })
 
       expect(profile).to be_a(SlackSender::Profile)
       expect(described_class.find(:test_profile)).to eq(profile)
     end
 
-    it "allows dev_channel to be nil" do
+    it "allows sandbox to be empty" do
       profile = described_class.register(:test_profile,
                                          token: "TEST_TOKEN")
 
-      expect(profile.dev_channel).to be_nil
+      expect(profile.sandbox_channel).to be_nil
     end
 
     it "defaults channels and user_groups to empty hashes" do
@@ -33,12 +33,12 @@ RSpec.describe SlackSender::ProfileRegistry do
     it "raises error if profile already exists" do
       described_class.register(:test_profile,
                                token: "TEST_TOKEN",
-                               dev_channel: "C123")
+                               sandbox: { channel: { replace_with: "C123" } })
 
       expect do
         described_class.register(:test_profile,
                                  token: "OTHER_TOKEN",
-                                 dev_channel: "C456")
+                                 sandbox: { channel: { replace_with: "C456" } })
       end.to raise_error(SlackSender::DuplicateProfileError, /already registered/)
     end
   end
@@ -47,13 +47,13 @@ RSpec.describe SlackSender::ProfileRegistry do
     before do
       described_class.register(:test_profile,
                                token: "TEST_TOKEN",
-                               dev_channel: "C123")
+                               sandbox: { channel: { replace_with: "C123" } })
     end
 
     it "finds a registered profile" do
       profile = described_class.find(:test_profile)
       expect(profile).to be_a(SlackSender::Profile)
-      expect(profile.dev_channel).to eq("C123")
+      expect(profile.sandbox_channel).to eq("C123")
     end
 
     it "raises error if profile not found" do
@@ -79,7 +79,7 @@ RSpec.describe SlackSender::ProfileRegistry do
     before do
       described_class.register(:test_profile,
                                token: "TEST_TOKEN",
-                               dev_channel: "C123")
+                               sandbox: { channel: { replace_with: "C123" } })
     end
 
     it "clears all registered profiles" do
