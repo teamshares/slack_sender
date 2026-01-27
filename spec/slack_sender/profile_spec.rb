@@ -374,6 +374,76 @@ RSpec.describe SlackSender::Profile do
         end
       end
 
+      context "with files" do
+        let(:file) { StringIO.new("file content") }
+        let(:file_uploader) { instance_double(SlackSender::FileUploader) }
+        let(:file_ids) { [{ "id" => "F123", "title" => "attachment 1" }] }
+
+        before do
+          allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
+          allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
+        end
+
+        it "uploads files to Slack synchronously via FileUploader" do
+          expect(SlackSender::FileUploader).to receive(:new).with(profile.client, [file])
+          expect(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
+
+          profile.call(channel: "C123", files: [file])
+        end
+
+        it "passes file_ids instead of files to call_async" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            profile: "test_profile",
+            channel: "C123",
+            file_ids:,
+          )
+
+          profile.call(channel: "C123", files: [file])
+        end
+
+        it "does not include files in call_async kwargs" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+            expect(kwargs).not_to have_key(:files)
+            expect(kwargs).to have_key(:file_ids)
+          end
+
+          profile.call(channel: "C123", files: [file])
+        end
+
+        context "with text and files" do
+          it "includes both text and file_ids" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              profile: "test_profile",
+              channel: "C123",
+              text: "Check out this file",
+              file_ids:,
+            )
+
+            profile.call(channel: "C123", text: "Check out this file", files: [file])
+          end
+        end
+
+        context "when FileUploader raises an error" do
+          before do
+            allow(file_uploader).to receive(:upload_to_slack).and_raise(
+              Slack::Web::Api::Errors::SlackError.new("ratelimited"),
+            )
+          end
+
+          it "propagates the error to the caller" do
+            expect { profile.call(channel: "C123", files: [file]) }.to raise_error(
+              Slack::Web::Api::Errors::SlackError,
+            )
+          end
+
+          it "does not enqueue the job" do
+            expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
+
+            expect { profile.call(channel: "C123", files: [file]) }.to raise_error(Slack::Web::Api::Errors::SlackError)
+          end
+        end
+      end
+
       context "when profile is not registered" do
         before do
           SlackSender::ProfileRegistry.all.delete(profile.key)

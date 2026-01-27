@@ -91,8 +91,12 @@ module SlackSender
               "SlackSender.config.async_backend to enable automatic retries for failed Slack sends."
       end
 
-      # Only relevant before we send to the backend -- avoid filling redis with large files
-      raise Error, "can't upload files to background job... yet (feature planned post alpha release)" if kwargs[:files].present?
+      # Upload files to Slack synchronously, then pass file_ids to the background job.
+      # This avoids serializing large file contents to Redis while still enabling async delivery.
+      if kwargs[:files].present?
+        uploader = FileUploader.new(client, kwargs.delete(:files))
+        kwargs[:file_ids] = uploader.upload_to_slack
+      end
 
       unless ProfileRegistry.all[key] == self
         raise Error,

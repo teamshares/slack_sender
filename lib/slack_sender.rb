@@ -33,6 +33,7 @@ require_relative "slack_sender/profile_registry"
 require_relative "slack_sender/delivery_axn"
 require_relative "slack_sender/file_wrapper"
 require_relative "slack_sender/multi_file_wrapper"
+require_relative "slack_sender/file_uploader"
 
 module SlackSender
   class << self

@@ -48,6 +48,11 @@ module SlackSender
     expects :files, type: Array, optional: true, preprocess: lambda { |raw|
       MultiFileWrapper.new(raw).files
     }
+    # file_ids is used for async file uploads: files are uploaded to Slack's servers
+    # synchronously (returning file_ids), then the background job calls
+    # files_completeUploadExternal to share them to the channel.
+    # Array of hashes with "id" and "title" keys.
+    expects :file_ids, type: Array, optional: true
 
     exposes :thread_ts, type: String, optional: true
 
@@ -55,7 +60,8 @@ module SlackSender
       # Handle sandbox mode behavior
       return handle_sandbox_noop if sandbox_noop?
 
-      files.present? ? upload_files : post_message
+      has_files = files.present? || file_ids.present?
+      has_files ? upload_files : post_message
     rescue Slack::Web::Api::Errors::IsArchived => e
       raise(e) unless SlackSender.config.silence_archived_channel_exceptions
 
@@ -124,6 +130,29 @@ module SlackSender
 
     # Core sending methods
     def upload_files
+      if file_ids.present?
+        # Async path: complete pre-uploaded files (uploaded via FileUploader)
+        complete_preuploaded_files
+      else
+        # Sync path: use files_upload_v2 for the full upload flow
+        upload_files_v2
+      end
+    end
+
+    # Completes files that were pre-uploaded to Slack's servers via FileUploader.
+    # Called from background jobs where file_ids were passed instead of file content.
+    def complete_preuploaded_files
+      response = client.files_completeUploadExternal(
+        files: file_ids.to_json,
+        channel_id: channel_to_use,
+        initial_comment: text_to_use,
+      )
+
+      extract_thread_ts_from_complete_response(response)
+    end
+
+    # Uses files_upload_v2 for synchronous file uploads (call! path).
+    def upload_files_v2
       file_uploads = files.map(&:to_h)
       response = client.files_upload_v2(
         files: file_uploads,
@@ -131,6 +160,20 @@ module SlackSender
         initial_comment: text_to_use,
       )
 
+      extract_thread_ts_from_upload_response(response)
+    end
+
+    def extract_thread_ts_from_complete_response(response)
+      # files_completeUploadExternal returns files array with shares info
+      file_obj = response.dig("files", 0)
+      return unless file_obj
+
+      ts = file_obj.dig("shares", "public", channel_to_use, 0, "ts") ||
+           file_obj.dig("shares", "private", channel_to_use, 0, "ts")
+      expose thread_ts: ts if ts
+    end
+
+    def extract_thread_ts_from_upload_response(response)
       # files_upload_v2 doesn't return thread_ts directly, so we fetch it via files.info
       file_id = response.dig("files", 0, "id")
       return unless file_id
