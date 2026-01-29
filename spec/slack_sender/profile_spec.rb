@@ -476,6 +476,7 @@ RSpec.describe SlackSender::Profile do
         it "uploads files to Slack synchronously via FileUploader" do
           expect(SlackSender::FileUploader).to receive(:new).and_call_original
           allow_any_instance_of(SlackSender::FileUploader).to receive(:upload_to_slack).and_return(file_ids)
+          allow(SlackSender::DeliveryAxn).to receive(:call_async)
 
           profile.call(channel: "C123", files: [file])
         end
@@ -582,6 +583,7 @@ RSpec.describe SlackSender::Profile do
             before do
               allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(nil)
               allow(SlackSender.config).to receive(:max_inline_file_size).and_return(100)
+              allow(SlackSender::DeliveryAxn).to receive(:call_async)
             end
 
             it "does not raise for large files (only Slack's 1 GB limit applies)" do
