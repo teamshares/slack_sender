@@ -261,6 +261,13 @@ RSpec.describe SlackSender::Configuration do
         /max_inline_file_size must be a non-negative integer/,
       )
     end
+
+    it "raises ArgumentError for nil (unlike max_async_file_upload_size)" do
+      expect { config.max_inline_file_size = nil }.to raise_error(
+        ArgumentError,
+        /max_inline_file_size must be a non-negative integer/,
+      )
+    end
   end
 
   describe "#max_async_file_upload_size" do

@@ -769,63 +769,24 @@ RSpec.describe SlackSender::DeliveryAxn do
       end
 
       context "when MissingScope error occurs" do
-        # Slack::Messages::Message responds to method calls for its attributes
         let(:response_body) { double("body", error: "missing_scope", needed: "chat:write", response_metadata: nil) }
         let(:response_env) { { request_headers: {}, response_headers: {} } }
-        let(:faraday_response) { instance_double(Faraday::Response, body: response_body, env: response_env) }
-        let(:missing_scope_error) { Slack::Web::Api::Errors::MissingScope.new("missing_scope", faraday_response) }
+        let(:trigger_error) { -> { action_class.call!(profile:, channel:, text:) } }
 
-        before do
-          allow(client_dbl).to receive(:chat_postMessage).and_raise(missing_scope_error)
-        end
+        before { allow(client_dbl).to receive(:chat_postMessage).and_raise(missing_scope_error) }
 
-        it "raises SlackSender::Error with the needed scope in the message" do
-          expect { action_class.call!(profile:, channel:, text:) }.to raise_error(
-            SlackSender::Error,
-            /chat:write/,
-          )
-        end
-
-        it "includes guidance about adding the scope" do
-          expect { action_class.call!(profile:, channel:, text:) }.to raise_error(
-            SlackSender::Error,
-            /Add this scope to your Slack app/,
-          )
-        end
+        include_examples "missing scope error handling", expected_scope: "chat:write"
 
         context "when needed scope is in response_metadata" do
-          let(:response_body) { double("body", error: "missing_scope", needed: nil, response_metadata: { "needed" => "channels:read" }) }
-
-          it "extracts scope from response_metadata" do
-            expect { action_class.call!(profile:, channel:, text:) }.to raise_error(
-              SlackSender::Error,
-              /channels:read/,
-            )
-          end
+          include_examples "missing scope error extraction from response_metadata", expected_scope: "channels:read"
         end
 
         context "when needed scope is only in HTTP headers" do
-          let(:response_body) { double("body", error: "missing_scope", needed: nil, response_metadata: nil) }
-          let(:response_env) { { request_headers: {}, response_headers: { "x-accepted-oauth-scopes" => "chat:write" } } }
-
-          it "extracts scope from x-accepted-oauth-scopes header" do
-            expect { action_class.call!(profile:, channel:, text:) }.to raise_error(
-              SlackSender::Error,
-              /chat:write/,
-            )
-          end
+          include_examples "missing scope error extraction from HTTP headers", expected_scope: "chat:write"
         end
 
         context "when no scope information is available" do
-          let(:response_body) { double("body", error: "missing_scope", needed: nil, response_metadata: nil) }
-          let(:response_env) { { request_headers: {}, response_headers: {} } }
-
-          it "raises SlackSender::Error with generic message" do
-            expect { action_class.call!(profile:, channel:, text:) }.to raise_error(
-              SlackSender::Error,
-              /Check your Slack app's OAuth scopes/,
-            )
-          end
+          include_examples "missing scope error with unknown scope"
         end
       end
     end

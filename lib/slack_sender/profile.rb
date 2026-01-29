@@ -94,20 +94,7 @@ module SlackSender
               "SlackSender.config.async_backend to enable automatic retries for failed Slack sends."
       end
 
-      # Handle files for async delivery
-      if kwargs[:files].present?
-        wrapped_files = MultiFileWrapper.new(kwargs.delete(:files))
-        wrapped_files.validate_for_async!
-
-        if wrapped_files.total_file_size <= SlackSender.config.max_inline_file_size
-          # Small files: serialize directly to job payload (skip sync Slack upload)
-          kwargs[:files] = wrapped_files.files
-        else
-          # Larger files: upload to Slack synchronously, pass file_ids to job
-          uploader = FileUploader.new(client, wrapped_files.files)
-          kwargs[:file_ids] = uploader.upload_to_slack
-        end
-      end
+      preprocess_files_for_async!(kwargs)
 
       unless ProfileRegistry.all[key] == self
         raise Error,
@@ -154,6 +141,25 @@ module SlackSender
       return [false, nil] if Util.blank_text_only?(kwargs)
 
       [true, preprocess_call_kwargs(kwargs)]
+    end
+
+    # Handles file preprocessing for async delivery.
+    # - Validates files against size limits
+    # - Small files (< max_inline_file_size): serialized directly to job payload
+    # - Larger files: uploaded to Slack synchronously, file_ids passed to job for sharing
+    def preprocess_files_for_async!(kwargs)
+      return unless kwargs[:files].present?
+
+      wrapped = MultiFileWrapper.new(kwargs.delete(:files))
+      wrapped.validate_for_async!
+
+      if wrapped.total_file_size <= SlackSender.config.max_inline_file_size
+        # Small files: serialize directly to job payload (skip sync Slack upload)
+        kwargs[:files] = wrapped.files
+      else
+        # Larger files: upload to Slack synchronously, pass file_ids to job
+        kwargs[:file_ids] = FileUploader.new(client, wrapped.files).upload_to_slack
+      end
     end
 
     def preprocess_call_kwargs(raw)

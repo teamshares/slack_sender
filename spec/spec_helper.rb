@@ -8,6 +8,9 @@ Bundler.require(:default, :development)
 require "slack_sender"
 require "axn/testing/spec_helpers"
 
+# Load support files (shared examples, helpers, etc.)
+Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }
+
 # Helper for building Slack API errors with properly-formed response objects.
 # The gem's SlackError#error and #response_metadata methods call response.body.*,
 # so we need to provide a response with a body that responds to these methods.

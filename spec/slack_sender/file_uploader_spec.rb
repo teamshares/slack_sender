@@ -1,37 +1,33 @@
 # frozen_string_literal: true
 
 RSpec.describe SlackSender::FileUploader do
-  let(:profile) { build(:profile) }
   let(:client) { instance_double(Slack::Web::Client) }
   let(:file_content) { "test file content" }
   let(:file) { StringIO.new(file_content) }
-
-  before do
-    allow(profile).to receive(:client).and_return(client)
-  end
+  let(:wrapped_files) { SlackSender::MultiFileWrapper.new(file).files }
 
   describe "#initialize" do
-    it "wraps files using MultiFileWrapper" do
-      uploader = described_class.new(client, file)
+    it "stores the provided files" do
+      uploader = described_class.new(client, wrapped_files)
 
-      expect(uploader.files).to be_an(Array)
-      expect(uploader.files.length).to eq(1)
+      expect(uploader.files).to eq(wrapped_files)
       expect(uploader.files.first).to be_a(SlackSender::FileWrapper)
     end
 
-    it "handles array of files" do
-      file2 = StringIO.new("second file")
-      uploader = described_class.new(client, [file, file2])
+    it "stores the client" do
+      uploader = described_class.new(client, wrapped_files)
 
-      expect(uploader.files.length).to eq(2)
+      expect(uploader.client).to eq(client)
     end
   end
 
   describe "#upload_to_slack" do
+    subject(:uploader) { described_class.new(client, wrapped_files) }
+
     let(:upload_url) { "https://files.slack.com/upload/v1/ABC123" }
     let(:file_id) { "F123ABC456" }
     let(:faraday_connection) { instance_double(Faraday::Connection) }
-    let(:faraday_response) { instance_double(Faraday::Response, success?: true, status: 200) }
+    let(:upload_response) { instance_double(Faraday::Response, success?: true, status: 200) }
 
     before do
       allow(client).to receive(:files_getUploadURLExternal).and_return({
@@ -39,12 +35,10 @@ RSpec.describe SlackSender::FileUploader do
                                                                          "file_id" => file_id,
                                                                        })
       allow(Faraday::Connection).to receive(:new).and_return(faraday_connection)
-      allow(faraday_connection).to receive(:post).and_yield(double(body: nil).as_null_object).and_return(faraday_response)
+      allow(faraday_connection).to receive(:post).and_yield(double(body: nil).as_null_object).and_return(upload_response)
     end
 
     it "calls files_getUploadURLExternal with filename and length" do
-      uploader = described_class.new(client, file)
-
       expect(client).to receive(:files_getUploadURLExternal).with(
         filename: "attachment 1",
         length: file_content.bytesize,
@@ -54,26 +48,21 @@ RSpec.describe SlackSender::FileUploader do
     end
 
     it "POSTs file content to the upload URL" do
-      uploader = described_class.new(client, file)
-
       expect(Faraday::Connection).to receive(:new).with(upload_url).and_return(faraday_connection)
-      expect(faraday_connection).to receive(:post).and_return(faraday_response)
+      expect(faraday_connection).to receive(:post).and_return(upload_response)
 
       uploader.upload_to_slack
     end
 
     it "returns array of file info hashes with id and title" do
-      uploader = described_class.new(client, file)
-
       result = uploader.upload_to_slack
 
-      expect(result).to be_an(Array)
-      expect(result.length).to eq(1)
-      expect(result.first).to eq({ "id" => file_id, "title" => "attachment 1" })
+      expect(result).to eq([{ "id" => file_id, "title" => "attachment 1" }])
     end
 
     context "with multiple files" do
       let(:file2) { StringIO.new("second file content") }
+      let(:wrapped_files) { SlackSender::MultiFileWrapper.new([file, file2]).files }
       let(:file_id2) { "F789DEF012" }
 
       before do
@@ -88,13 +77,12 @@ RSpec.describe SlackSender::FileUploader do
       end
 
       it "uploads each file and returns all file info" do
-        uploader = described_class.new(client, [file, file2])
-
         result = uploader.upload_to_slack
 
-        expect(result.length).to eq(2)
-        expect(result[0]["id"]).to eq(file_id)
-        expect(result[1]["id"]).to eq(file_id2)
+        expect(result).to eq([
+                               { "id" => file_id, "title" => "attachment 1" },
+                               { "id" => file_id2, "title" => "attachment 2" },
+                             ])
       end
     end
 
@@ -104,10 +92,9 @@ RSpec.describe SlackSender::FileUploader do
         f.define_singleton_method(:original_filename) { "report.csv" }
         f
       end
+      let(:wrapped_files) { SlackSender::MultiFileWrapper.new(named_file).files }
 
-      it "uses the original filename in the title" do
-        uploader = described_class.new(client, named_file)
-
+      it "uses the original filename" do
         expect(client).to receive(:files_getUploadURLExternal).with(
           filename: "report.csv",
           length: "named content".bytesize,
@@ -122,13 +109,9 @@ RSpec.describe SlackSender::FileUploader do
     context "when upload fails" do
       let(:failed_response) { instance_double(Faraday::Response, success?: false, status: 500, body: "Internal Server Error") }
 
-      before do
-        allow(faraday_connection).to receive(:post).and_return(failed_response)
-      end
+      before { allow(faraday_connection).to receive(:post).and_return(failed_response) }
 
-      it "raises an error" do
-        uploader = described_class.new(client, file)
-
+      it "raises an error with status code" do
         expect { uploader.upload_to_slack }.to raise_error(
           SlackSender::Error,
           /Failed to upload file to Slack: 500/,
@@ -143,81 +126,30 @@ RSpec.describe SlackSender::FileUploader do
         )
       end
 
-      it "propagates the error" do
-        uploader = described_class.new(client, file)
-
+      it "propagates the Slack error" do
         expect { uploader.upload_to_slack }.to raise_error(Slack::Web::Api::Errors::SlackError)
       end
     end
 
-    context "when missing_scope error occurs" do
-      # Slack::Messages::Message responds to method calls for its attributes
+    context "when MissingScope error occurs" do
       let(:response_body) { double("body", error: "missing_scope", errors: nil, needed: "files:write", response_metadata: nil) }
       let(:response_env) { { request_headers: {}, response_headers: {} } }
-      let(:faraday_response) { instance_double(Faraday::Response, body: response_body, env: response_env) }
-      let(:missing_scope_error) { Slack::Web::Api::Errors::MissingScope.new("missing_scope", faraday_response) }
+      let(:trigger_error) { -> { uploader.upload_to_slack } }
 
-      before do
-        allow(client).to receive(:files_getUploadURLExternal).and_raise(missing_scope_error)
-      end
+      before { allow(client).to receive(:files_getUploadURLExternal).and_raise(missing_scope_error) }
 
-      it "raises SlackSender::Error with the needed scope in the message" do
-        uploader = described_class.new(client, file)
-
-        expect { uploader.upload_to_slack }.to raise_error(
-          SlackSender::Error,
-          /files:write/,
-        )
-      end
-
-      it "includes guidance about adding the scope" do
-        uploader = described_class.new(client, file)
-
-        expect { uploader.upload_to_slack }.to raise_error(
-          SlackSender::Error,
-          /Add this scope to your Slack app/,
-        )
-      end
+      include_examples "missing scope error handling", expected_scope: "files:write"
 
       context "when needed scope is in response_metadata" do
-        let(:response_body) { double("body", error: "missing_scope", errors: nil, needed: nil, response_metadata: { "needed" => "files:read" }) }
-
-        it "extracts scope from response_metadata" do
-          uploader = described_class.new(client, file)
-
-          expect { uploader.upload_to_slack }.to raise_error(
-            SlackSender::Error,
-            /files:read/,
-          )
-        end
+        include_examples "missing scope error extraction from response_metadata", expected_scope: "files:read"
       end
 
       context "when needed scope is only in HTTP headers" do
-        let(:response_body) { double("body", error: "missing_scope", errors: nil, needed: nil, response_metadata: nil) }
-        let(:response_env) { { request_headers: {}, response_headers: { "x-accepted-oauth-scopes" => "files:write" } } }
-
-        it "extracts scope from x-accepted-oauth-scopes header" do
-          uploader = described_class.new(client, file)
-
-          expect { uploader.upload_to_slack }.to raise_error(
-            SlackSender::Error,
-            /files:write/,
-          )
-        end
+        include_examples "missing scope error extraction from HTTP headers", expected_scope: "files:write"
       end
 
       context "when no scope information is available" do
-        let(:response_body) { double("body", error: "missing_scope", errors: nil, needed: nil, response_metadata: nil) }
-        let(:response_env) { { request_headers: {}, response_headers: {} } }
-
-        it "raises SlackSender::Error with generic message" do
-          uploader = described_class.new(client, file)
-
-          expect { uploader.upload_to_slack }.to raise_error(
-            SlackSender::Error,
-            /Check your Slack app's OAuth scopes/,
-          )
-        end
+        include_examples "missing scope error with unknown scope"
       end
     end
   end

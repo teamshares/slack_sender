@@ -98,7 +98,7 @@ module SlackSender
     private
 
     def validate_max_inline_file_size!(value)
-      return if value.nil? || (value.is_a?(Integer) && value >= 0)
+      return if value.is_a?(Integer) && value >= 0
 
       raise ArgumentError, "max_inline_file_size must be a non-negative integer, got: #{value.inspect}"
     end

@@ -10,9 +10,11 @@ module SlackSender
   class FileUploader
     attr_reader :client, :files
 
-    def initialize(client, raw_files)
+    # @param client [Slack::Web::Client] The Slack client instance
+    # @param files [Array<FileWrapper>] Pre-wrapped file objects (from MultiFileWrapper)
+    def initialize(client, files)
       @client = client
-      @files = MultiFileWrapper.new(raw_files).files
+      @files = files
     end
 
     # Uploads files to Slack's servers without sharing them to any channel.
