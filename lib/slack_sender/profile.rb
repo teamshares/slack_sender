@@ -18,6 +18,8 @@ module SlackSender
       validate_sandbox_config!
     end
 
+    def inspect = "<SlackSender::Profile[:#{key}]>"
+
     # Sandbox accessors for cleaner internal access
     def sandbox_channel = sandbox.dig(:channel, :replace_with)
     def sandbox_channel_message_prefix = sandbox.dig(:channel, :message_prefix)

@@ -127,7 +127,7 @@ module SlackSender
 
     # TODO: this is directionally correct, but more-correct would involve conversations.list
     def channel_id?(given)
-      given[0] != "#" && given.match?(/\A[CGD][A-Z0-9]+\z/)
+      given[0] != "#" && given.match?(/\A[CGDZ][A-Z0-9]+\z/)
     end
 
     # Core sending methods
@@ -144,6 +144,8 @@ module SlackSender
     # Completes files that were pre-uploaded to Slack's servers via FileUploader.
     # Called from background jobs where file_ids were passed instead of file content.
     def complete_preuploaded_files
+      validate_channel_id_for_file_upload!
+
       response = client.files_completeUploadExternal(
         files: file_ids.to_json,
         channel_id: channel_to_use,
@@ -155,6 +157,8 @@ module SlackSender
 
     # Uses files_upload_v2 for synchronous file uploads (call! path).
     def upload_files_v2
+      validate_channel_id_for_file_upload!
+
       file_uploads = files.map(&:to_h)
       response = client.files_upload_v2(
         files: file_uploads,
@@ -163,6 +167,16 @@ module SlackSender
       )
 
       extract_thread_ts_from_upload_response(response)
+    end
+
+    # Slack's files_upload_v2 API requires channel IDs (e.g., C024BE91L, D032AC32T),
+    # not usernames (@user) or channel names (#channel). This is a limitation of
+    # the newer Slack file upload APIs.
+    def validate_channel_id_for_file_upload!
+      ch = channel_to_use
+      return if channel_id?(ch)
+
+      raise InvalidArgumentsError, format(ErrorMessages::FILE_UPLOAD_REQUIRES_CHANNEL_ID, ch)
     end
 
     def extract_thread_ts_from_complete_response(response)

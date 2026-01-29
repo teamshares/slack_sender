@@ -841,7 +841,12 @@ RSpec.describe SlackSender::DeliveryAxn do
         it "returns failed result with error message when using call" do
           result = action_class.call(profile:, **call_args)
           expect(result).not_to be_ok
-          expect(result.error).to eq(error_message)
+          # Handle both string (eq) and regex (match) patterns
+          if error_message.is_a?(Regexp)
+            expect(result.error).to match(error_message)
+          else
+            expect(result.error).to eq(error_message)
+          end
         end
 
         it "captures the exception on the result" do
@@ -897,6 +902,27 @@ RSpec.describe SlackSender::DeliveryAxn do
         end
 
         include_examples "raises InvalidArgumentsError", "Cannot provide files with icon_emoji"
+      end
+
+      context "when files provided with non-ID channel format" do
+        let(:file) { StringIO.new("content") }
+
+        before do
+          # Disable sandbox mode so channel is not redirected to a valid ID
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+        end
+
+        context "with @username format" do
+          let(:call_args) { { channel: "@username", files: [file], text: "test" } }
+
+          include_examples "raises InvalidArgumentsError", /File uploads require a channel ID.*not '@username'/
+        end
+
+        context "with #channel-name format" do
+          let(:call_args) { { channel: "#general", files: [file], text: "test" } }
+
+          include_examples "raises InvalidArgumentsError", /File uploads require a channel ID.*not '#general'/
+        end
       end
 
       context "when unknown channel with validate_known_channel: true" do

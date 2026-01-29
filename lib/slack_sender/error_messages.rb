@@ -28,5 +28,10 @@ module SlackSender
                     "Add this scope to your Slack app at https://api.slack.com/apps and reinstall the app."
     MISSING_SCOPE_UNKNOWN = "Slack API missing_scope error (scope not specified in response). " \
                             "Check your Slack app's OAuth scopes at https://api.slack.com/apps"
+
+    # File upload errors
+    FILE_UPLOAD_REQUIRES_CHANNEL_ID = "File uploads require a channel ID (e.g., C024BE91L or D032AC32T), " \
+                                      "not '%s'. Slack's files_upload_v2 API does not support usernames (@user) " \
+                                      "or channel names (#channel). Use the channel/DM ID instead."
   end
 end

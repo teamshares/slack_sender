@@ -51,6 +51,25 @@ gem install slack_sender
 - A Slack API token (Bot User OAuth Token)
 - For async delivery: Sidekiq or ActiveJob (auto-detected if available)
 
+### Required Slack Scopes
+
+Your Slack app needs specific OAuth scopes depending on which features you use. Add these under **OAuth & Permissions** → **Bot Token Scopes** in your [Slack app settings](https://api.slack.com/apps).
+
+**Minimum scopes for basic messaging:**
+- `chat:write`
+
+**Recommended scopes for full functionality:**
+
+| Scope | Required For | Notes |
+|-------|--------------|-------|
+| `chat:write` | All messaging | Required for `chat.postMessage` — sending text, blocks, and attachments |
+| `chat:write.public` | Public channels | Post to public channels your bot hasn't been added to |
+| `files:write` | File uploads | Required for `files.getUploadURLExternal` and `files.completeUploadExternal` |
+| `files:read` | File metadata | Required if you need thread timestamps from file uploads (used internally by SlackSender) |
+
+
+After adding scopes, reinstall the app to your workspace to apply the changes.
+
 ## Quick Start
 
 ### 1. Configure a Profile
@@ -229,6 +248,26 @@ SlackSender.call(
   ]
 )
 ```
+
+**Important: Channel ID required for file uploads**
+
+Slack's `files_upload_v2` API requires channel IDs (e.g., `C024BE91L`, `D032AC32T`), not usernames (`@user`) or channel names (`#channel`). This is a limitation of the newer Slack file upload APIs.
+
+```ruby
+# ✅ Works - using channel ID from profile
+SlackSender.call!(channel: :alerts, files: [file])
+
+# ✅ Works - using channel ID directly
+SlackSender.call!(channel: "C024BE91L", files: [file])
+
+# ❌ Fails - @username not supported for file uploads
+SlackSender.call!(channel: "@username", files: [file])
+
+# ❌ Fails - #channel-name not supported for file uploads
+SlackSender.call!(channel: "#general", files: [file])
+```
+
+To send files as a DM, use the DM channel ID (starts with `D`) which you can find in Slack's URL when viewing the conversation.
 
 **Async file upload behavior:**
 
@@ -820,6 +859,39 @@ A: If sandbox channel is configured, all messages are redirected there when in s
 A: The bot must be invited to the channel. Options:
 1. Invite the bot to the channel manually
 2. See: https://stackoverflow.com/a/68475477
+
+### Q: Getting "missing_scope" errors
+
+A: Your Slack app is missing required OAuth scopes. The error message will tell you which scope is needed:
+
+```
+Slack API missing_scope error: required scope 'files:write' is not granted.
+Add this scope to your Slack app at https://api.slack.com/apps and reinstall the app.
+```
+
+To fix:
+1. Go to https://api.slack.com/apps and select your app
+2. Navigate to **OAuth & Permissions** → **Bot Token Scopes**
+3. Add the missing scope (e.g., `files:write`)
+4. Reinstall the app to your workspace
+
+See [Required Slack Scopes](#required-slack-scopes) for a complete list of scopes needed for each feature.
+
+### Q: File uploads fail with "channel ID required" error
+
+A: Slack's file upload APIs require channel IDs, not usernames or channel names:
+
+```ruby
+# ❌ These don't work for file uploads
+SlackSender.call!(channel: "@username", files: [file])
+SlackSender.call!(channel: "#general", files: [file])
+
+# ✅ Use channel IDs instead
+SlackSender.call!(channel: "C024BE91L", files: [file])  # Public channel
+SlackSender.call!(channel: "D032AC32T", files: [file])  # DM channel
+```
+
+For DMs, find the DM channel ID (starts with `D`) from Slack's URL when viewing the conversation.
 
 ### Q: File uploads fail with async delivery
 
