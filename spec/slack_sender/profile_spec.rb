@@ -3,6 +3,20 @@
 RSpec.describe SlackSender::Profile do
   let(:profile) { build(:profile) }
 
+  describe "#inspect" do
+    it "returns a readable representation with the profile key" do
+      expect(profile.inspect).to eq("<SlackSender::Profile[:test_profile]>")
+    end
+
+    context "with different profile key" do
+      let(:profile) { build(:profile, key: :alerts) }
+
+      it "includes the correct key" do
+        expect(profile.inspect).to eq("<SlackSender::Profile[:alerts]>")
+      end
+    end
+  end
+
   describe "token handling" do
     context "when token is a string" do
       it "configures client with the token value" do

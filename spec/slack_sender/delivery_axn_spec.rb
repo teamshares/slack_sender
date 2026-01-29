@@ -923,6 +923,25 @@ RSpec.describe SlackSender::DeliveryAxn do
 
           include_examples "raises InvalidArgumentsError", /File uploads require a channel ID.*not '#general'/
         end
+
+        context "with valid channel ID formats" do
+          before do
+            allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "F123" }] })
+            allow(client_dbl).to receive(:files_info).and_return({ "file" => { "shares" => {} } })
+          end
+
+          # C = public channel, G = private channel/group, D = DM, Z = Slack Connect
+          %w[C024BE91L G024BE91L D024BE91L Z024BE91L].each do |channel_id|
+            context "with #{channel_id[0]}-prefixed channel ID" do
+              let(:call_args) { { channel: channel_id, files: [file], text: "test" } }
+
+              it "accepts the channel ID" do
+                result = action_class.call(profile:, **call_args)
+                expect(result).to be_ok
+              end
+            end
+          end
+        end
       end
 
       context "when unknown channel with validate_known_channel: true" do
