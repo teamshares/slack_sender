@@ -3,6 +3,20 @@
 RSpec.describe SlackSender::Profile do
   let(:profile) { build(:profile) }
 
+  describe "#inspect" do
+    it "returns a readable representation with the profile key" do
+      expect(profile.inspect).to eq("<SlackSender::Profile[:test_profile]>")
+    end
+
+    context "with different profile key" do
+      let(:profile) { build(:profile, key: :alerts) }
+
+      it "includes the correct key" do
+        expect(profile.inspect).to eq("<SlackSender::Profile[:alerts]>")
+      end
+    end
+  end
+
   describe "token handling" do
     context "when token is a string" do
       it "configures client with the token value" do
@@ -443,6 +457,183 @@ RSpec.describe SlackSender::Profile do
             text: "test",
           )
           profile.call(channel: "C123", text: "test", blocks: [])
+        end
+      end
+
+      context "with files (larger than inline threshold)" do
+        let(:file) { StringIO.new("file content") }
+        let(:file_uploader) { instance_double(SlackSender::FileUploader) }
+        let(:file_ids) { [{ "id" => "F123", "title" => "attachment 1" }] }
+
+        before do
+          # Set threshold low so file exceeds inline limit and triggers FileUploader path
+          allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
+          allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+          allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
+          allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
+        end
+
+        it "uploads files to Slack synchronously via FileUploader" do
+          expect(SlackSender::FileUploader).to receive(:new).and_call_original
+          allow_any_instance_of(SlackSender::FileUploader).to receive(:upload_to_slack).and_return(file_ids)
+          allow(SlackSender::DeliveryAxn).to receive(:call_async)
+
+          profile.call(channel: "C123", files: [file])
+        end
+
+        it "passes file_ids instead of files to call_async" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            profile: "test_profile",
+            channel: "C123",
+            file_ids:,
+          )
+
+          profile.call(channel: "C123", files: [file])
+        end
+
+        it "does not include files in call_async kwargs" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+            expect(kwargs).not_to have_key(:files)
+            expect(kwargs).to have_key(:file_ids)
+          end
+
+          profile.call(channel: "C123", files: [file])
+        end
+
+        context "with text and files" do
+          it "includes both text and file_ids" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              profile: "test_profile",
+              channel: "C123",
+              text: "Check out this file",
+              file_ids:,
+            )
+
+            profile.call(channel: "C123", text: "Check out this file", files: [file])
+          end
+        end
+
+        context "when FileUploader raises an error" do
+          before do
+            allow(file_uploader).to receive(:upload_to_slack).and_raise(
+              Slack::Web::Api::Errors::SlackError.new("ratelimited"),
+            )
+          end
+
+          it "propagates the error to the caller" do
+            expect { profile.call(channel: "C123", files: [file]) }.to raise_error(
+              Slack::Web::Api::Errors::SlackError,
+            )
+          end
+
+          it "does not enqueue the job" do
+            expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
+
+            expect { profile.call(channel: "C123", files: [file]) }.to raise_error(Slack::Web::Api::Errors::SlackError)
+          end
+        end
+
+        context "file size validation" do
+          context "when file exceeds Slack's 1 GB limit" do
+            let(:large_content) { "x" * 100 } # Simulate large file
+            let(:large_file) { StringIO.new(large_content) }
+
+            before do
+              # Stub the bytesize to simulate a file > 1 GB
+              allow_any_instance_of(String).to receive(:bytesize).and_return(2_000_000_000)
+            end
+
+            it "raises an error before attempting upload" do
+              expect(SlackSender::FileUploader).not_to receive(:new)
+
+              expect { profile.call(channel: "C123", files: [large_file]) }.to raise_error(
+                SlackSender::Error,
+                /exceeds Slack's maximum file size of 1 GB/,
+              )
+            end
+          end
+
+          context "when total file size exceeds max_async_file_upload_size" do
+            let(:medium_file) { StringIO.new("x" * 1000) }
+
+            before do
+              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(500)
+            end
+
+            it "raises an error before attempting upload" do
+              expect(SlackSender::FileUploader).not_to receive(:new)
+
+              expect { profile.call(channel: "C123", files: [medium_file]) }.to raise_error(
+                SlackSender::Error,
+                /exceeds max_async_file_upload_size/,
+              )
+            end
+
+            it "includes helpful error message" do
+              expect { profile.call(channel: "C123", files: [medium_file]) }.to raise_error(
+                SlackSender::Error,
+                /Use SlackSender\.call! for synchronous upload/,
+              )
+            end
+          end
+
+          context "when max_async_file_upload_size is nil (disabled)" do
+            let(:medium_file) { StringIO.new("x" * 1_000_000) }
+
+            before do
+              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(nil)
+              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(100)
+              allow(SlackSender::DeliveryAxn).to receive(:call_async)
+            end
+
+            it "does not raise for large files (only Slack's 1 GB limit applies)" do
+              expect { profile.call(channel: "C123", files: [medium_file]) }.not_to raise_error
+            end
+          end
+        end
+
+        context "inline vs upload threshold" do
+          context "when files are smaller than max_inline_file_size" do
+            let(:small_file) { StringIO.new("small") }
+
+            before do
+              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1_000_000)
+              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+            end
+
+            it "passes files directly to call_async (no FileUploader)" do
+              expect(SlackSender::FileUploader).not_to receive(:new)
+
+              expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+                expect(kwargs[:files]).to be_an(Array)
+                expect(kwargs[:files].first).to be_a(SlackSender::FileWrapper)
+                expect(kwargs).not_to have_key(:file_ids)
+              end
+
+              profile.call(channel: "C123", files: [small_file])
+            end
+          end
+
+          context "when files exceed max_inline_file_size but within async limit" do
+            let(:medium_file) { StringIO.new("x" * 1000) }
+
+            before do
+              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(100)
+              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+            end
+
+            it "uploads to Slack and passes file_ids to call_async" do
+              expect(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
+              expect(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
+
+              expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+                expect(kwargs[:file_ids]).to eq(file_ids)
+                expect(kwargs).not_to have_key(:files)
+              end
+
+              profile.call(channel: "C123", files: [medium_file])
+            end
+          end
         end
       end
 

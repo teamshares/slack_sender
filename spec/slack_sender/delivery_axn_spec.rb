@@ -245,6 +245,67 @@ RSpec.describe SlackSender::DeliveryAxn do
         end
       end
     end
+
+    context "when file_ids are provided" do
+      let(:file_ids) { [{ "id" => "F123", "title" => "file.txt" }] }
+
+      before do
+        allow(client_dbl).to receive(:files_completeUploadExternal).and_return({
+                                                                                 "files" => [{ "id" => "F123", "shares" => {} }],
+                                                                               })
+      end
+
+      context "with blocks" do
+        subject(:result) { action_class.call(profile:, channel:, file_ids:, blocks: [{ type: "section" }]) }
+
+        it "fails with error message" do
+          expect(result).not_to be_ok
+          expect(result.error).to eq("Cannot provide files with blocks")
+        end
+      end
+
+      context "with attachments" do
+        subject(:result) { action_class.call(profile:, channel:, file_ids:, attachments: [{ color: "good" }]) }
+
+        it "fails with error message" do
+          expect(result).not_to be_ok
+          expect(result.error).to eq("Cannot provide files with attachments")
+        end
+      end
+
+      context "with icon_emoji" do
+        subject(:result) { action_class.call(profile:, channel:, file_ids:, icon_emoji: "robot") }
+
+        it "fails with error message" do
+          expect(result).not_to be_ok
+          expect(result.error).to eq("Cannot provide files with icon_emoji")
+        end
+      end
+
+      context "with text only" do
+        subject(:result) { action_class.call(profile:, channel:, file_ids:, text:) }
+
+        before do
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+        end
+
+        it "succeeds" do
+          expect(result).to be_ok
+        end
+      end
+
+      context "without any other content" do
+        subject(:result) { action_class.call(profile:, channel:, file_ids:) }
+
+        before do
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+        end
+
+        it "succeeds (file_ids counts as valid content)" do
+          expect(result).to be_ok
+        end
+      end
+    end
   end
 
   describe "#call" do
@@ -376,6 +437,98 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "finds thread_ts from private shares" do
           expect(result.thread_ts).to eq("private.ts")
+        end
+      end
+
+      context "with file_ids (async path)" do
+        subject(:result) { action_class.call(profile:, channel:, file_ids:, text: "File attached") }
+
+        let(:file_ids) { [{ "id" => "F123ABC", "title" => "report.csv" }] }
+
+        before do
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+          allow(client_dbl).to receive(:files_completeUploadExternal).and_return({
+                                                                                   "files" => [{
+                                                                                     "id" => "F123ABC",
+                                                                                     "shares" => { "public" => { channel => [{ "ts" => "456.789" }] } },
+                                                                                   }],
+                                                                                 })
+        end
+
+        it "calls files_completeUploadExternal with file_ids and channel" do
+          expect(client_dbl).to receive(:files_completeUploadExternal).with(
+            files: file_ids.to_json,
+            channel_id: channel,
+            initial_comment: "File attached",
+          )
+
+          expect(result).to be_ok
+        end
+
+        it "exposes thread_ts from response" do
+          expect(result.thread_ts).to eq("456.789")
+        end
+
+        context "with multiple files" do
+          let(:file_ids) do
+            [
+              { "id" => "F123ABC", "title" => "report.csv" },
+              { "id" => "F456DEF", "title" => "data.json" },
+            ]
+          end
+
+          it "passes all file_ids to files_completeUploadExternal" do
+            expect(client_dbl).to receive(:files_completeUploadExternal).with(
+              files: file_ids.to_json,
+              channel_id: channel,
+              initial_comment: "File attached",
+            )
+
+            expect(result).to be_ok
+          end
+        end
+
+        context "without text" do
+          subject(:result) { action_class.call(profile:, channel:, file_ids:) }
+
+          it "succeeds with nil initial_comment" do
+            expect(client_dbl).to receive(:files_completeUploadExternal).with(
+              files: file_ids.to_json,
+              channel_id: channel,
+              initial_comment: nil,
+            )
+
+            expect(result).to be_ok
+          end
+        end
+
+        context "with private channel shares in response" do
+          before do
+            allow(client_dbl).to receive(:files_completeUploadExternal).and_return({
+                                                                                     "files" => [{
+                                                                                       "id" => "F123ABC",
+                                                                                       "shares" => { "private" => { channel => [{ "ts" => "private.456" }] } },
+                                                                                     }],
+                                                                                   })
+          end
+
+          it "finds thread_ts from private shares" do
+            expect(result.thread_ts).to eq("private.456")
+          end
+        end
+
+        context "when files_completeUploadExternal fails" do
+          before do
+            allow(client_dbl).to receive(:files_completeUploadExternal).and_raise(
+              Slack::Web::Api::Errors::SlackError.new("ratelimited"),
+            )
+          end
+
+          it "propagates the error" do
+            expect { action_class.call!(profile:, channel:, file_ids:) }.to raise_error(
+              Slack::Web::Api::Errors::SlackError,
+            )
+          end
         end
       end
 
@@ -614,6 +767,28 @@ RSpec.describe SlackSender::DeliveryAxn do
           end
         end
       end
+
+      context "when MissingScope error occurs" do
+        let(:response_body) { double("body", error: "missing_scope", needed: "chat:write", response_metadata: nil) }
+        let(:response_env) { { request_headers: {}, response_headers: {} } }
+        let(:trigger_error) { -> { action_class.call!(profile:, channel:, text:) } }
+
+        before { allow(client_dbl).to receive(:chat_postMessage).and_raise(missing_scope_error) }
+
+        include_examples "missing scope error handling", expected_scope: "chat:write"
+
+        context "when needed scope is in response_metadata" do
+          include_examples "missing scope error extraction from response_metadata", expected_scope: "channels:read"
+        end
+
+        context "when needed scope is only in HTTP headers" do
+          include_examples "missing scope error extraction from HTTP headers", expected_scope: "chat:write"
+        end
+
+        context "when no scope information is available" do
+          include_examples "missing scope error with unknown scope"
+        end
+      end
     end
   end
 
@@ -627,7 +802,12 @@ RSpec.describe SlackSender::DeliveryAxn do
         it "returns failed result with error message when using call" do
           result = action_class.call(profile:, **call_args)
           expect(result).not_to be_ok
-          expect(result.error).to eq(error_message)
+          # Handle both string (eq) and regex (match) patterns
+          if error_message.is_a?(Regexp)
+            expect(result.error).to match(error_message)
+          else
+            expect(result.error).to eq(error_message)
+          end
         end
 
         it "captures the exception on the result" do
@@ -683,6 +863,46 @@ RSpec.describe SlackSender::DeliveryAxn do
         end
 
         include_examples "raises InvalidArgumentsError", "Cannot provide files with icon_emoji"
+      end
+
+      context "when files provided with non-ID channel format" do
+        let(:file) { StringIO.new("content") }
+
+        before do
+          # Disable sandbox mode so channel is not redirected to a valid ID
+          allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+        end
+
+        context "with @username format" do
+          let(:call_args) { { channel: "@username", files: [file], text: "test" } }
+
+          include_examples "raises InvalidArgumentsError", /File uploads require a channel ID.*not '@username'/
+        end
+
+        context "with #channel-name format" do
+          let(:call_args) { { channel: "#general", files: [file], text: "test" } }
+
+          include_examples "raises InvalidArgumentsError", /File uploads require a channel ID.*not '#general'/
+        end
+
+        context "with valid channel ID formats" do
+          before do
+            allow(client_dbl).to receive(:files_upload_v2).and_return({ "files" => [{ "id" => "F123" }] })
+            allow(client_dbl).to receive(:files_info).and_return({ "file" => { "shares" => {} } })
+          end
+
+          # C = public channel, G = private channel/group, D = DM, Z = Slack Connect
+          %w[C024BE91L G024BE91L D024BE91L Z024BE91L].each do |channel_id|
+            context "with #{channel_id[0]}-prefixed channel ID" do
+              let(:call_args) { { channel: channel_id, files: [file], text: "test" } }
+
+              it "accepts the channel ID" do
+                result = action_class.call(profile:, **call_args)
+                expect(result).to be_ok
+              end
+            end
+          end
+        end
       end
 
       context "when unknown channel with validate_known_channel: true" do

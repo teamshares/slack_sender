@@ -51,6 +51,25 @@ gem install slack_sender
 - A Slack API token (Bot User OAuth Token)
 - For async delivery: Sidekiq or ActiveJob (auto-detected if available)
 
+### Required Slack Scopes
+
+Your Slack app needs specific OAuth scopes depending on which features you use. Add these under **OAuth & Permissions** → **Bot Token Scopes** in your [Slack app settings](https://api.slack.com/apps).
+
+**Minimum scopes for basic messaging:**
+- `chat:write`
+
+**Recommended scopes for full functionality:**
+
+| Scope | Required For | Notes |
+|-------|--------------|-------|
+| `chat:write` | All messaging | Required for `chat.postMessage` — sending text, blocks, and attachments |
+| `chat:write.public` | Public channels | Post to public channels your bot hasn't been added to |
+| `files:write` | File uploads | Required for `files.getUploadURLExternal` and `files.completeUploadExternal` |
+| `files:read` | File metadata | Required if you need thread timestamps from file uploads (used internally by SlackSender) |
+
+
+After adding scopes, reinstall the app to your workspace to apply the changes.
+
 ## Quick Start
 
 ### 1. Configure a Profile
@@ -199,17 +218,17 @@ SlackSender.call(
 
 ### File Uploads
 
-File uploads are supported with synchronous delivery (`call!`). Note: file uploads are not yet supported with async delivery (feature planned post alpha release).
+File uploads are supported with both synchronous (`call!`) and async (`call`) delivery.
 
 ```ruby
-# Single file
+# Synchronous delivery (blocking)
 SlackSender.call!(
   channel: :reports,
   text: "Daily ops report attached",
   files: [File.open("report.pdf")]
 )
 
-# Multiple files
+# Multiple files (synchronous)
 SlackSender.call!(
   channel: :reports,
   text: "Daily ops report (details + raw export)",
@@ -218,7 +237,50 @@ SlackSender.call!(
     File.open("data.csv")
   ]
 )
+
+# Async delivery (background job handles sharing)
+SlackSender.call(
+  channel: :alerts,
+  text: "Multiple files attached",
+  files: [
+    File.open("report.pdf"),
+    File.open("data.csv")
+  ]
+)
 ```
+
+**Important: Channel ID required for file uploads**
+
+Slack's `files_upload_v2` API requires channel IDs (e.g., `C024BE91L`, `D032AC32T`), not usernames (`@user`) or channel names (`#channel`). This is a limitation of the newer Slack file upload APIs.
+
+```ruby
+# ✅ Works - using channel ID from profile
+SlackSender.call!(channel: :alerts, files: [file])
+
+# ✅ Works - using channel ID directly
+SlackSender.call!(channel: "C024BE91L", files: [file])
+
+# ❌ Fails - @username not supported for file uploads
+SlackSender.call!(channel: "@username", files: [file])
+
+# ❌ Fails - #channel-name not supported for file uploads
+SlackSender.call!(channel: "#general", files: [file])
+```
+
+To send files as a DM, use the DM channel ID (starts with `D`) which you can find in Slack's URL when viewing the conversation.
+
+**Async file upload behavior:**
+
+- **Small files** (< `max_inline_file_size`, default 512 KB): Serialized directly to the job payload
+- **Larger files**: Uploaded to Slack's servers synchronously, then the background job shares them to the channel
+
+This means `call` with larger files may block briefly during the upload phase. The background job then handles sharing to the channel with automatic retry support for rate limits.
+
+**Size limits:**
+
+- Individual files cannot exceed **1 GB** (Slack's hard limit)
+- Total file size for async uploads is limited by `max_async_file_upload_size` (default 25 MB) to prevent blocking web processes on large uploads
+- Use `call!` for synchronous upload when you need to upload files larger than `max_async_file_upload_size`
 
 **Note**: Filenames are automatically detected from file objects. For custom filenames, use objects that respond to `original_filename` (e.g., ActionDispatch::Http::UploadedFile) or ensure the file path contains the desired filename.
 
@@ -529,6 +591,8 @@ end
 | `sandbox_default_behavior` | `Symbol` | `:noop` | Default behavior when in sandbox mode if profile doesn't specify. Options: `:noop`, `:redirect`, `:passthrough` |
 | `enabled` | `Boolean` | `true` | Global enable/disable flag. When `false`, `call` and `call!` return `false` without sending |
 | `silence_archived_channel_exceptions` | `Boolean` | `false` | If `true`, silently ignores `IsArchived` errors instead of reporting them |
+| `max_inline_file_size` | `Integer` | `524_288` (512 KB) | Max total file size to serialize directly to job payload. Files larger than this are uploaded to Slack first. |
+| `max_async_file_upload_size` | `Integer` or `nil` | `26_214_400` (25 MB) | Max total file size for async uploads. Exceeding raises error immediately. Set to `nil` to disable (only Slack's 1 GB limit applies). |
 
 #### Profile Configuration (`SlackSender.register`)
 
@@ -796,12 +860,57 @@ A: The bot must be invited to the channel. Options:
 1. Invite the bot to the channel manually
 2. See: https://stackoverflow.com/a/68475477
 
-### Q: File uploads fail with async delivery
+### Q: Getting "missing_scope" errors
 
-A: File uploads are only supported with synchronous delivery (`call!`). This is a known limitation and will be addressed in a future release. Use `call!` for file uploads:
+A: Your Slack app is missing required OAuth scopes. The error message will tell you which scope is needed:
+
+```
+Slack API missing_scope error: required scope 'files:write' is not granted.
+Add this scope to your Slack app at https://api.slack.com/apps and reinstall the app.
+```
+
+To fix:
+1. Go to https://api.slack.com/apps and select your app
+2. Navigate to **OAuth & Permissions** → **Bot Token Scopes**
+3. Add the missing scope (e.g., `files:write`)
+4. Reinstall the app to your workspace
+
+See [Required Slack Scopes](#required-slack-scopes) for a complete list of scopes needed for each feature.
+
+### Q: File uploads fail with "channel ID required" error
+
+A: Slack's file upload APIs require channel IDs, not usernames or channel names:
 
 ```ruby
-SlackSender.call!(channel: :ops_alerts, files: [file])
+# ❌ These don't work for file uploads
+SlackSender.call!(channel: "@username", files: [file])
+SlackSender.call!(channel: "#general", files: [file])
+
+# ✅ Use channel IDs instead
+SlackSender.call!(channel: "C024BE91L", files: [file])  # Public channel
+SlackSender.call!(channel: "D032AC32T", files: [file])  # DM channel
+```
+
+For DMs, find the DM channel ID (starts with `D`) from Slack's URL when viewing the conversation.
+
+### Q: File uploads fail with async delivery
+
+A: File uploads with async delivery (`call`) are supported, but have size limits:
+
+- Files smaller than `max_inline_file_size` (default 512 KB) are serialized directly to the job
+- Larger files are uploaded to Slack synchronously, then shared via background job
+- Total file size cannot exceed `max_async_file_upload_size` (default 25 MB)
+
+If you're hitting the async size limit, either:
+1. Use `call!` for synchronous upload (no size limit except Slack's 1 GB per file)
+2. Increase `config.max_async_file_upload_size` (may block web processes longer)
+
+```ruby
+# For large files, use synchronous delivery
+SlackSender.call!(channel: :alerts, files: [large_file])
+
+# Or increase the async limit
+SlackSender.config.max_async_file_upload_size = 100_000_000  # 100 MB
 ```
 
 ### Q: How do I disable SlackSender temporarily?

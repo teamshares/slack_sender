@@ -18,6 +18,8 @@ module SlackSender
       validate_sandbox_config!
     end
 
+    def inspect = "<SlackSender::Profile[:#{key}]>"
+
     # Sandbox accessors for cleaner internal access
     def sandbox_channel = sandbox.dig(:channel, :replace_with)
     def sandbox_channel_message_prefix = sandbox.dig(:channel, :message_prefix)
@@ -92,8 +94,7 @@ module SlackSender
               "SlackSender.config.async_backend to enable automatic retries for failed Slack sends."
       end
 
-      # Only relevant before we send to the backend -- avoid filling redis with large files
-      raise Error, "can't upload files to background job... yet (feature planned post alpha release)" if kwargs[:files].present?
+      preprocess_files_for_async!(kwargs)
 
       unless ProfileRegistry.all[key] == self
         raise Error,
@@ -140,6 +141,25 @@ module SlackSender
       return [false, nil] if Util.blank_text_only?(kwargs)
 
       [true, preprocess_call_kwargs(kwargs)]
+    end
+
+    # Handles file preprocessing for async delivery.
+    # - Validates files against size limits
+    # - Small files (< max_inline_file_size): serialized directly to job payload
+    # - Larger files: uploaded to Slack synchronously, file_ids passed to job for sharing
+    def preprocess_files_for_async!(kwargs)
+      return unless kwargs[:files].present?
+
+      wrapped = MultiFileWrapper.new(kwargs.delete(:files))
+      wrapped.validate_for_async!
+
+      if wrapped.total_file_size <= SlackSender.config.max_inline_file_size
+        # Small files: serialize directly to job payload (skip sync Slack upload)
+        kwargs[:files] = wrapped.files
+      else
+        # Larger files: upload to Slack synchronously, pass file_ids to job
+        kwargs[:file_ids] = FileUploader.new(client, wrapped.files).upload_to_slack
+      end
     end
 
     def preprocess_call_kwargs(raw)
