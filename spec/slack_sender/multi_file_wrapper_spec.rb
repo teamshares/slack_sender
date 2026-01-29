@@ -100,4 +100,94 @@ RSpec.describe SlackSender::MultiFileWrapper do
       end
     end
   end
+
+  describe "#validate_for_async!" do
+    let(:file) { StringIO.new("test content") }
+    let(:wrapper) { described_class.new(file) }
+
+    before do
+      allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+    end
+
+    context "when files are within limits" do
+      it "does not raise" do
+        expect { wrapper.validate_for_async! }.not_to raise_error
+      end
+    end
+
+    context "when a file exceeds Slack's 1 GB limit" do
+      before do
+        allow(wrapper.files.first.content).to receive(:bytesize).and_return(2_000_000_000)
+      end
+
+      it "raises an error with filename and size" do
+        expect { wrapper.validate_for_async! }.to raise_error(
+          SlackSender::Error,
+          /exceeds Slack's maximum file size of 1 GB/,
+        )
+      end
+    end
+
+    context "when total size exceeds max_async_file_upload_size" do
+      before do
+        allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(5)
+      end
+
+      it "raises an error with size details" do
+        expect { wrapper.validate_for_async! }.to raise_error(
+          SlackSender::Error,
+          /exceeds max_async_file_upload_size/,
+        )
+      end
+
+      it "includes guidance to use call!" do
+        expect { wrapper.validate_for_async! }.to raise_error(
+          SlackSender::Error,
+          /Use SlackSender\.call! for synchronous upload/,
+        )
+      end
+    end
+
+    context "when max_async_file_upload_size is nil (disabled)" do
+      before do
+        allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(nil)
+      end
+
+      it "does not raise for any size" do
+        expect { wrapper.validate_for_async! }.not_to raise_error
+      end
+    end
+
+    context "with multiple files" do
+      let(:file1) { StringIO.new("a" * 100) }
+      let(:file2) { StringIO.new("b" * 100) }
+      let(:wrapper) { described_class.new([file1, file2]) }
+
+      context "when total exceeds async limit" do
+        before do
+          allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(150)
+        end
+
+        it "raises based on combined size" do
+          expect { wrapper.validate_for_async! }.to raise_error(
+            SlackSender::Error,
+            /200 bytes.*exceeds max_async_file_upload_size.*150 bytes/,
+          )
+        end
+      end
+
+      context "when one file exceeds Slack limit" do
+        before do
+          allow(wrapper.files[1].content).to receive(:bytesize).and_return(2_000_000_000)
+        end
+
+        it "raises for the specific file" do
+          expect { wrapper.validate_for_async! }.to raise_error(
+            SlackSender::Error,
+            /attachment 2.*exceeds Slack's maximum/,
+          )
+        end
+      end
+    end
+  end
 end
