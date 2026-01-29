@@ -62,6 +62,8 @@ module SlackSender
 
       has_files = files.present? || file_ids.present?
       has_files ? upload_files : post_message
+    rescue Slack::Web::Api::Errors::MissingScope => e
+      reraise_missing_scope_with_details(e)
     rescue Slack::Web::Api::Errors::IsArchived => e
       raise(e) unless SlackSender.config.silence_archived_channel_exceptions
 

@@ -44,5 +44,34 @@ module SlackSender
       # Default: let the backend use its default retry behavior
       nil
     end
+
+    # Extracts the needed scope from a MissingScope exception.
+    # Tries multiple locations since slack-ruby-client's structure varies:
+    # - response_metadata["needed"] (documented but not always present)
+    # - response.body.needed (Slack::Messages::Message object)
+    # - HTTP header x-accepted-oauth-scopes
+    # @param exception [Slack::Web::Api::Errors::MissingScope] The exception
+    # @return [String, nil] The needed scope, or nil if not found
+    def self.extract_needed_scope(exception)
+      # Try response_metadata first (documented location)
+      exception.response_metadata&.dig("needed") ||
+        # Try response.body which is a Slack::Messages::Message
+        exception.response&.body&.try(:needed) ||
+        exception.response&.body&.try(:[], "needed") ||
+        # Try HTTP headers as fallback
+        exception.response&.env&.dig(:response_headers, "x-accepted-oauth-scopes")
+    end
+
+    # Builds a descriptive error message for MissingScope exceptions.
+    # @param exception [Slack::Web::Api::Errors::MissingScope] The exception
+    # @return [String] A user-friendly error message
+    def self.missing_scope_error_message(exception)
+      needed = extract_needed_scope(exception)
+      if needed.present?
+        format(ErrorMessages::MISSING_SCOPE, needed)
+      else
+        ErrorMessages::MISSING_SCOPE_UNKNOWN
+      end
+    end
   end
 end

@@ -26,6 +26,11 @@ module SlackSender
           "Message: #{text.presence || "(blocks/attachments only)"}",
         ].compact_blank.join
       end
+
+      # Re-raises MissingScope errors with more helpful error messages
+      def reraise_missing_scope_with_details(exception)
+        raise Error, Util.missing_scope_error_message(exception)
+      end
     end
   end
 end

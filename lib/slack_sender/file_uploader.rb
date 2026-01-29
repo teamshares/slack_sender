@@ -21,6 +21,7 @@ module SlackSender
     #
     # @return [Array<Hash>] Array of { id: String, title: String }
     # @raise [Slack::Web::Api::Errors::SlackError] If upload fails
+    # @raise [SlackSender::Error] If missing_scope error with descriptive message
     def upload_to_slack
       files.map do |file|
         response = client.files_getUploadURLExternal(
@@ -32,6 +33,8 @@ module SlackSender
 
         { "id" => response["file_id"], "title" => file.filename }
       end
+    rescue Slack::Web::Api::Errors::MissingScope => e
+      raise Error, Util.missing_scope_error_message(e)
     end
 
     private
