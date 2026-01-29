@@ -190,6 +190,80 @@ RSpec.describe SlackSender::Profile do
     end
   end
 
+  describe "argument validation" do
+    before do
+      allow(SlackSender.config).to receive(:enabled).and_return(true)
+    end
+
+    shared_examples "validates unknown kwargs" do |method_name|
+      context "with unknown kwargs" do
+        it "raises ArgumentError for single unknown kwarg" do
+          expect do
+            profile.public_send(method_name, channel: "C123", test: "typo")
+          end.to raise_error(ArgumentError, /Unknown argument\(s\): :test/)
+        end
+
+        it "raises ArgumentError for multiple unknown kwargs" do
+          expect do
+            profile.public_send(method_name, channel: "C123", test: "typo", foo: "bar")
+          end.to raise_error(ArgumentError, /Unknown argument\(s\):.*:test.*:foo|Unknown argument\(s\):.*:foo.*:test/)
+        end
+
+        it "includes valid arguments in error message" do
+          expect do
+            profile.public_send(method_name, channel: "C123", test: "typo")
+          end.to raise_error(ArgumentError, /Valid arguments are:.*text.*blocks.*attachments/)
+        end
+      end
+
+      context "with valid kwargs" do
+        it "does not raise for text" do
+          expect { profile.public_send(method_name, channel: "C123", text: "hello") }.not_to raise_error
+        end
+
+        it "does not raise for blocks" do
+          expect { profile.public_send(method_name, channel: "C123", blocks: [{ "type" => "section" }]) }.not_to raise_error
+        end
+
+        it "does not raise for attachments" do
+          expect { profile.public_send(method_name, channel: "C123", attachments: [{ "text" => "hi" }]) }.not_to raise_error
+        end
+
+        it "does not raise for icon_emoji" do
+          expect { profile.public_send(method_name, channel: "C123", text: "hi", icon_emoji: ":robot:") }.not_to raise_error
+        end
+
+        it "does not raise for thread_ts" do
+          expect { profile.public_send(method_name, channel: "C123", text: "hi", thread_ts: "123.456") }.not_to raise_error
+        end
+
+        it "does not raise for files" do
+          expect { profile.public_send(method_name, channel: "C123", files: [StringIO.new("content")]) }.not_to raise_error
+        end
+      end
+    end
+
+    describe "#call" do
+      before do
+        SlackSender::ProfileRegistry.all[profile.key] = profile
+        allow(SlackSender.config).to receive(:async_backend_available?).and_return(true)
+        allow(SlackSender::DeliveryAxn).to receive(:call_async)
+      end
+
+      include_examples "validates unknown kwargs", :call
+    end
+
+    describe "#call!" do
+      before do
+        allow(SlackSender::DeliveryAxn).to receive(:call!).and_return(
+          instance_double("Result", thread_ts: "123.456"),
+        )
+      end
+
+      include_examples "validates unknown kwargs", :call!
+    end
+  end
+
   describe "#call" do
     before do
       # Register the profile in the registry

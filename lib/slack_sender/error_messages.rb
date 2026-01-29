@@ -33,5 +33,8 @@ module SlackSender
     FILE_UPLOAD_REQUIRES_CHANNEL_ID = "File uploads require a channel ID (e.g., C024BE91L or D032AC32T), " \
                                       "not '%s'. Slack's files_upload_v2 API does not support usernames (@user) " \
                                       "or channel names (#channel). Use the channel/DM ID instead."
+
+    # Argument validation errors
+    UNKNOWN_KWARGS = "Unknown argument(s): %s. Valid arguments are: %s"
   end
 end
