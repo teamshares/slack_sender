@@ -81,11 +81,16 @@ module SlackSender
           merged = __slack_defaults.merge(kwargs)
 
           channel = merged.delete(:channel)
+          channels = merged.delete(:channels)
           profile = merged.delete(:profile) || :default
 
-          raise ArgumentError, "No channel specified and no default channel configured" unless channel
+          raise ArgumentError, "No channel(s) specified and no default channel configured" unless channel || channels
 
-          SlackSender.profile(profile).public_send(method, channel:, **merged)
+          if channels
+            SlackSender.profile(profile).public_send(method, channels:, **merged)
+          else
+            SlackSender.profile(profile).public_send(method, channel:, **merged)
+          end
         end
       end
     end

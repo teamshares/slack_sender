@@ -107,6 +107,70 @@ RSpec.describe SlackSender::Strategy do
           expect { action_class.call! }.to raise_error(SlackSender::Error, /No async backend configured/)
         end
       end
+
+      context "with channels: (multi-channel)" do
+        let(:action_class) do
+          build_axn do
+            use :slack, profile: :test_profile
+
+            expects :message, type: String
+
+            def call
+              slack message, channels: %i[slack_development eng_alerts]
+            end
+          end
+        end
+
+        it "enqueues to all channels" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            hash_including(channel: "slack_development", text: "Hello multi"),
+          ).ordered
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            hash_including(channel: "eng_alerts", text: "Hello multi"),
+          ).ordered
+
+          action_class.call(message: "Hello multi")
+        end
+
+        context "with channels: in defaults" do
+          let(:action_class) do
+            build_axn do
+              use :slack, channels: %i[slack_development eng_alerts], profile: :test_profile
+
+              def call
+                slack "Default multi-channel"
+              end
+            end
+          end
+
+          it "uses default channels" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(channel: "slack_development"),
+            ).ordered
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(channel: "eng_alerts"),
+            ).ordered
+
+            action_class.call
+          end
+        end
+
+        context "without any channel(s)" do
+          let(:action_class) do
+            build_axn do
+              use :slack, profile: :test_profile
+
+              def call
+                slack "No channel!"
+              end
+            end
+          end
+
+          it "raises ArgumentError when no channel(s) provided" do
+            expect { action_class.call! }.to raise_error(ArgumentError, /No channel\(s\) specified/)
+          end
+        end
+      end
     end
 
     describe "#slack! (sync)" do
@@ -186,7 +250,7 @@ RSpec.describe SlackSender::Strategy do
         end
 
         it "raises ArgumentError when no channel provided" do
-          expect { action_class.call! }.to raise_error(ArgumentError, /No channel specified/)
+          expect { action_class.call! }.to raise_error(ArgumentError, /No channel\(s\) specified/)
         end
       end
 

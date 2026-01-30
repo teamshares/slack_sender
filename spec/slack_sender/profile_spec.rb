@@ -265,6 +265,22 @@ RSpec.describe SlackSender::Profile do
       end
     end
 
+    shared_examples "validates channels: kwarg" do |method_name|
+      context "with channels: parameter" do
+        it "raises ArgumentError when both channel: and channels: are provided" do
+          expect do
+            profile.public_send(method_name, channel: :slack_development, channels: [:eng_alerts], text: "hello")
+          end.to raise_error(ArgumentError, /Cannot provide both channel: and channels:/)
+        end
+
+        it "raises ArgumentError when channels: is empty" do
+          expect do
+            profile.public_send(method_name, channels: [], text: "hello")
+          end.to raise_error(ArgumentError, /channels: cannot be empty/)
+        end
+      end
+    end
+
     describe "#call" do
       let(:delivery_kwargs) { nil }
 
@@ -280,6 +296,7 @@ RSpec.describe SlackSender::Profile do
 
       include_examples "validates unknown kwargs", :call
       include_examples "normalizes file: to files:", :call
+      include_examples "validates channels: kwarg", :call
     end
 
     describe "#call!" do
@@ -294,6 +311,7 @@ RSpec.describe SlackSender::Profile do
 
       include_examples "validates unknown kwargs", :call!
       include_examples "normalizes file: to files:", :call!
+      include_examples "validates channels: kwarg", :call!
     end
   end
 
@@ -898,6 +916,87 @@ RSpec.describe SlackSender::Profile do
           end
         end
       end
+
+      context "with channels: (multi-channel delivery)" do
+        it "enqueues a separate job for each channel" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            hash_including(profile: "test_profile", channel: "slack_development", text: "multi"),
+          ).ordered
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            hash_including(profile: "test_profile", channel: "eng_alerts", text: "multi"),
+          ).ordered
+
+          profile.call(channels: %i[slack_development eng_alerts], text: "multi")
+        end
+
+        it "returns true" do
+          allow(SlackSender::DeliveryAxn).to receive(:call_async)
+          expect(profile.call(channels: %i[slack_development eng_alerts], text: "multi")).to be true
+        end
+
+        context "with single-element array" do
+          it "normalizes to channel: and enqueues single job" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(profile: "test_profile", channel: "slack_development", text: "single"),
+            ).once
+
+            profile.call(channels: [:slack_development], text: "single")
+          end
+        end
+
+        context "with files" do
+          let(:file_content) { StringIO.new("file content") }
+          let(:file_uploader) { instance_double(SlackSender::FileUploader) }
+          let(:file_ids) { [{ "id" => "F123", "title" => "attachment 1" }] }
+
+          before do
+            allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
+            allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+            allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
+            allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
+          end
+
+          it "uploads files once and shares to all channels" do
+            expect(SlackSender::FileUploader).to receive(:new).once.and_return(file_uploader)
+            expect(file_uploader).to receive(:upload_to_slack).once.and_return(file_ids)
+
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(channel: "slack_development", file_ids:),
+            ).ordered
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(channel: "eng_alerts", file_ids:),
+            ).ordered
+
+            profile.call(channels: %i[slack_development eng_alerts], files: [file_content])
+          end
+        end
+
+        context "with symbol channels" do
+          it "preprocesses each channel and sets validate_known_channel" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(channel: "slack_development", validate_known_channel: true),
+            ).ordered
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(channel: "eng_alerts", validate_known_channel: true),
+            ).ordered
+
+            profile.call(channels: %i[slack_development eng_alerts], text: "test")
+          end
+        end
+
+        context "with string channels" do
+          it "does not set validate_known_channel" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(channel: "C123"),
+            ).ordered
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              hash_including(channel: "C456"),
+            ).ordered
+
+            profile.call(channels: %w[C123 C456], text: "test")
+          end
+        end
+      end
     end
 
     context "when config.enabled is false" do
@@ -934,6 +1033,36 @@ RSpec.describe SlackSender::Profile do
       it "calls DeliveryAxn.call! with profile" do
         expect(SlackSender::DeliveryAxn).to receive(:call!).with(profile:, channel: "C123", text: "test").and_return(result)
         expect(profile.call!(channel: "C123", text: "test")).to eq("123.456")
+      end
+
+      context "with channels: (multi-channel)" do
+        it "raises ArgumentError with helpful message" do
+          expect do
+            profile.call!(channels: %i[slack_development eng_alerts], text: "multi")
+          end.to raise_error(
+            ArgumentError,
+            /Multi-channel delivery via `channels:` is only supported for async calls/,
+          )
+        end
+
+        it "suggests using call instead of call!" do
+          expect do
+            profile.call!(channels: %i[slack_development eng_alerts], text: "multi")
+          end.to raise_error(
+            ArgumentError,
+            /Use `call` instead of `call!`/,
+          )
+        end
+
+        context "with single-element array (normalized to channel:)" do
+          it "works normally since it's normalized to single channel" do
+            expect(SlackSender::DeliveryAxn).to receive(:call!).with(
+              hash_including(profile:, channel: "slack_development", text: "single"),
+            ).and_return(result)
+
+            expect(profile.call!(channels: [:slack_development], text: "single")).to eq("123.456")
+          end
+        end
       end
 
       context "with symbol channel" do
