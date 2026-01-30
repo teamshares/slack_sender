@@ -9,10 +9,11 @@ SlackSender provides a simple, reliable way to send Slack messages from Ruby app
 SlackSender is a Ruby gem that simplifies sending messages to Slack by:
 
 - **Background dispatch** with automatic rate-limit retries via Sidekiq or ActiveJob
+- **Multi-channel async delivery** for broadcasting to multiple channels efficiently
 - **Development mode redirects** to prevent accidental production notifications
 - **Automatic error handling** for common Slack API errors (NotInChannel, ChannelNotFound, IsArchived)
 - **Multiple profile support** for managing multiple Slack workspaces
-- **File upload support** with synchronous delivery
+- **File upload support** with synchronous and async delivery
 - **User group mention formatting** with development mode substitution
 
 ## Motivation
@@ -182,6 +183,35 @@ SlackSender.call(channel: :deployments, text: "Hello") # Uses :deployments inste
 ```
 
 The `default_channel` can be a symbol (resolved from `channels` hash) or a channel ID string.
+
+### Multi-Channel Delivery
+
+Send the same message to multiple channels with a single call using `channels:` (plural):
+
+```ruby
+# Async delivery to multiple channels
+SlackSender.call(
+  channels: [:ops_alerts, :deployments],
+  text: ":rocket: Deploy finished for my-app"
+)
+```
+
+**Key behaviors:**
+- Multi-channel delivery is only supported via async (`call`). Using `call!` with `channels:` raises an error
+- Files are uploaded once and shared to all channels efficiently
+- Each channel receives a separate background job with independent retry handling
+- Single-element arrays (e.g., `channels: [:ops_alerts]`) are normalized to `channel:`
+
+```ruby
+# ❌ Sync multi-channel not supported
+SlackSender.call!(channels: [:a, :b], text: "...")  # Raises ArgumentError
+
+# ✅ Use async instead
+SlackSender.call(channels: [:a, :b], text: "...")
+
+# ✅ Or send individually if you need sync
+[:a, :b].each { |ch| SlackSender.call!(channel: ch, text: "...") }
+```
 
 ### Rich Messages
 
@@ -422,6 +452,7 @@ end
 ```ruby
 use :slack, channel: :general             # Default channel for all slack() calls
 use :slack, channel: :general, profile: :support  # Use a specific SlackSender profile
+use :slack, channels: [:alerts, :ops]     # Default to multiple channels (async only)
 use :slack                                # No default channel (must pass channel: each time)
 ```
 
@@ -502,7 +533,7 @@ notify do
 end
 
 notify do
-  channels :ops_alerts, :ic        # Multiple channels
+  channels :ops_alerts, :ic        # Multiple channels (files uploaded once, shared to all)
   only_if { priority == :high }    # Conditional send
   text :message_text               # Text from method
   attachments :build_attachments   # Attachments from method
@@ -928,6 +959,16 @@ SlackSender.config.max_async_file_upload_size = 100_000_000  # 100 MB
 ### Q: How do I disable SlackSender temporarily?
 
 A: Set `SlackSender.config.enabled = false`. All `call` and `call!` methods will return `false` without sending messages.
+
+### Q: Can I send to multiple channels at once?
+
+A: Yes, use `channels:` (plural) with async delivery:
+
+```ruby
+SlackSender.call(channels: [:alerts, :ops], text: "Broadcast message")
+```
+
+Multi-channel is only supported for async (`call`). Sync (`call!`) requires sending to each channel individually. Files are uploaded once and shared to all channels efficiently.
 
 ### Q: Can I use multiple Slack workspaces?
 

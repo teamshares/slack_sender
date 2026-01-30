@@ -16,15 +16,16 @@ module SlackSender
 
       # Execute this notification definition in the given notifier instance context.
       # Resolves all values (literals, symbols, blocks) and sends via slack().
+      # When multiple channels are specified, uses channels: kwarg for efficient file sharing.
       def execute(notifier)
         # Check condition first
         return if condition && !resolve(condition, notifier)
 
         # Resolve channels
-        resolved_channels = channels.flat_map { |ch| resolve(ch, notifier) }
+        resolved_channels = channels.flat_map { |ch| resolve(ch, notifier) }.compact
 
         # Validate: at least one channel
-        raise ArgumentError, "Missing `channel` in notify block. Add `channel :foo` or `channels ...`." if resolved_channels.compact.empty?
+        raise ArgumentError, "Missing `channel` in notify block. Add `channel :foo` or `channels ...`." if resolved_channels.empty?
 
         # Resolve payload
         resolved_payload = payload.transform_values { |v| resolve(v, notifier) }.compact
@@ -35,11 +36,15 @@ module SlackSender
         # Resolve profile if specified
         resolved_profile = profile ? resolve(profile, notifier) : nil
 
-        # Send to each channel
-        resolved_channels.compact.each do |ch|
-          kwargs = resolved_payload.dup
-          kwargs[:profile] = resolved_profile if resolved_profile
-          notifier.send(:slack, channel: ch, **kwargs)
+        # Build kwargs
+        kwargs = resolved_payload.dup
+        kwargs[:profile] = resolved_profile if resolved_profile
+
+        # Send: use channels: kwarg for multiple channels (efficient file sharing)
+        if resolved_channels.size == 1
+          notifier.send(:slack, channel: resolved_channels.first, **kwargs)
+        else
+          notifier.send(:slack, channels: resolved_channels, **kwargs)
         end
       end
 

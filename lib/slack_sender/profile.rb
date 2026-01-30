@@ -8,6 +8,7 @@ module SlackSender
     # These are validated early (before backgrounding) to catch typos like `test:` instead of `text:`
     VALID_CALL_KWARGS = %i[
       channel
+      channels
       text
       blocks
       attachments
@@ -108,20 +109,25 @@ module SlackSender
               "SlackSender.config.async_backend to enable automatic retries for failed Slack sends."
       end
 
-      preprocess_files_for_async!(kwargs)
-
       unless ProfileRegistry.all[key] == self
         raise Error,
               "Profile must be registered before using async delivery. Register it with SlackSender.register(name, config)"
       end
 
-      DeliveryAxn.call_async(profile: key.to_s, **kwargs)
-      true
+      if kwargs[:channels]
+        dispatch_to_channels(kwargs)
+      else
+        preprocess_files_for_async!(kwargs)
+        DeliveryAxn.call_async(profile: key.to_s, **kwargs)
+        true
+      end
     end
 
     def call!(**)
       enabled, kwargs = enabled_and_preprocessed_kwargs(**)
       return false unless enabled
+
+      raise ArgumentError, ErrorMessages::MULTI_CHANNEL_SYNC_NOT_SUPPORTED if kwargs[:channels]
 
       DeliveryAxn.call!(profile: self, **kwargs).thread_ts
     end
@@ -157,6 +163,21 @@ module SlackSender
       [true, preprocess_call_kwargs(kwargs)]
     end
 
+    # Handles multi-channel async delivery by enqueuing a separate job for each channel.
+    # Files are preprocessed once (uploaded if needed) and the same file_ids are used for all channels.
+    def dispatch_to_channels(kwargs) # rubocop:disable Naming/PredicateMethod
+      channels = kwargs.delete(:channels)
+      preprocess_files_for_async!(kwargs) # Upload once, get file_ids
+
+      channels.each do |ch|
+        channel_kwargs = kwargs.dup
+        channel_kwargs[:channel] = ch
+        preprocess_channel!(channel_kwargs) # Convert symbol -> string + validate flag
+        DeliveryAxn.call_async(profile: key.to_s, **channel_kwargs)
+      end
+      true
+    end
+
     # Handles file preprocessing for async delivery.
     # - Validates files against size limits
     # - Small files (< max_inline_file_size): serialized directly to job payload
@@ -180,6 +201,7 @@ module SlackSender
       raw.dup.tap do |kwargs|
         validate_known_kwargs!(kwargs)
         normalize_file_to_files!(kwargs)
+        normalize_channels!(kwargs)
         validate_and_handle_profile_parameter!(kwargs)
         apply_default_channel!(kwargs)
         preprocess_channel!(kwargs)
@@ -193,6 +215,23 @@ module SlackSender
       raise ArgumentError, ErrorMessages::FILE_AND_FILES_CONFLICT if kwargs.key?(:files)
 
       kwargs[:files] = [kwargs.delete(:file)]
+    end
+
+    def normalize_channels!(kwargs)
+      return unless kwargs.key?(:channels)
+
+      raise ArgumentError, ErrorMessages::CHANNEL_AND_CHANNELS_CONFLICT if kwargs.key?(:channel)
+
+      channels_array = Array(kwargs[:channels])
+
+      if channels_array.size == 1
+        # Single-element array: normalize to channel: for consistency
+        kwargs[:channel] = channels_array.first
+        kwargs.delete(:channels)
+      else
+        # Multiple channels: keep as channels: array
+        kwargs[:channels] = channels_array
+      end
     end
 
     def validate_known_kwargs!(kwargs)

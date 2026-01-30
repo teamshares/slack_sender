@@ -37,5 +37,8 @@ module SlackSender
     # Argument validation errors
     UNKNOWN_KWARGS = "Unknown argument(s): %s. Valid arguments are: %s"
     FILE_AND_FILES_CONFLICT = "Cannot provide both file: and files:"
+    CHANNEL_AND_CHANNELS_CONFLICT = "Cannot provide both channel: and channels:"
+    MULTI_CHANNEL_SYNC_NOT_SUPPORTED = "Multi-channel delivery via `channels:` is only supported for async calls. " \
+                                       "Use `call` instead of `call!`, or send to each channel individually."
   end
 end

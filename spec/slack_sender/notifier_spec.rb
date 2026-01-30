@@ -158,6 +158,39 @@ RSpec.describe SlackSender::Notifier do
 
       notifier_class.call
     end
+
+    it "uses channels: kwarg for efficiency (single slack call with multiple channels)" do
+      # Verify it's using the channels: kwarg path (one call to slack with channels:)
+      # rather than looping and calling slack individually
+      expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+        hash_including(channel: "notifications", validate_known_channel: true),
+      ).ordered
+
+      expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+        hash_including(channel: "eng_alerts", validate_known_channel: true),
+      ).ordered
+
+      notifier_class.call
+    end
+  end
+
+  describe "notify with single channel" do
+    let(:notifier_class) do
+      Class.new(described_class) do
+        notify do
+          channel :notifications
+          text "Single channel message"
+        end
+      end
+    end
+
+    it "uses channel: kwarg (not channels:)" do
+      expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+        hash_including(channel: "notifications", validate_known_channel: true),
+      ).once
+
+      notifier_class.call
+    end
   end
 
   describe "notify with only_if condition (symbol)" do
