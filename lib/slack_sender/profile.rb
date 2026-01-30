@@ -119,8 +119,8 @@ module SlackSender
       else
         preprocess_files_for_async!(kwargs)
         DeliveryAxn.call_async(profile: key.to_s, **kwargs)
-        true
       end
+      true
     end
 
     def call!(**)
@@ -165,7 +165,7 @@ module SlackSender
 
     # Handles multi-channel async delivery by enqueuing a separate job for each channel.
     # Files are preprocessed once (uploaded if needed) and the same file_ids are used for all channels.
-    def dispatch_to_channels(kwargs) # rubocop:disable Naming/PredicateMethod
+    def dispatch_to_channels(kwargs)
       channels = kwargs.delete(:channels)
       preprocess_files_for_async!(kwargs) # Upload once, get file_ids
 
@@ -175,7 +175,6 @@ module SlackSender
         preprocess_channel!(channel_kwargs) # Convert symbol -> string + validate flag
         DeliveryAxn.call_async(profile: key.to_s, **channel_kwargs)
       end
-      true
     end
 
     # Handles file preprocessing for async delivery.
@@ -201,10 +200,8 @@ module SlackSender
       raw.dup.tap do |kwargs|
         validate_known_kwargs!(kwargs)
         normalize_file_to_files!(kwargs)
-        normalize_channels!(kwargs)
+        normalize_and_apply_channels!(kwargs)
         validate_and_handle_profile_parameter!(kwargs)
-        apply_default_channel!(kwargs)
-        preprocess_channel!(kwargs)
         preprocess_blocks_and_attachments!(kwargs)
       end
     end
@@ -217,21 +214,14 @@ module SlackSender
       kwargs[:files] = [kwargs.delete(:file)]
     end
 
-    def normalize_channels!(kwargs)
-      return unless kwargs.key?(:channels)
-
-      raise ArgumentError, ErrorMessages::CHANNEL_AND_CHANNELS_CONFLICT if kwargs.key?(:channel)
-
-      channels_array = Array(kwargs[:channels])
-
-      if channels_array.size == 1
-        # Single-element array: normalize to channel: for consistency
-        kwargs[:channel] = channels_array.first
-        kwargs.delete(:channels)
-      else
-        # Multiple channels: keep as channels: array
-        kwargs[:channels] = channels_array
-      end
+    def normalize_and_apply_channels!(kwargs)
+      normalizer = ChannelNormalizer.new(
+        channel: kwargs.delete(:channel),
+        channels: kwargs.delete(:channels),
+      )
+      normalizer.apply_default!(default_channel)
+      normalizer.preprocess_channel!
+      kwargs.merge!(normalizer.to_kwargs)
     end
 
     def validate_known_kwargs!(kwargs)
@@ -243,12 +233,6 @@ module SlackSender
         unknown_keys.map(&:inspect).join(", "),
         VALID_CALL_KWARGS.join(", "),
       )
-    end
-
-    def apply_default_channel!(kwargs)
-      return if kwargs[:channel].present?
-
-      kwargs[:channel] = default_channel if default_channel.present?
     end
 
     def validate_and_handle_profile_parameter!(kwargs)

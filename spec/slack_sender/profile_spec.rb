@@ -272,6 +272,12 @@ RSpec.describe SlackSender::Profile do
             profile.public_send(method_name, channel: :slack_development, channels: [:eng_alerts], text: "hello")
           end.to raise_error(ArgumentError, /Cannot provide both channel: and channels:/)
         end
+
+        it "raises ArgumentError when channels: is empty" do
+          expect do
+            profile.public_send(method_name, channels: [], text: "hello")
+          end.to raise_error(ArgumentError, /channels: cannot be empty/)
+        end
       end
     end
 
@@ -920,12 +926,12 @@ RSpec.describe SlackSender::Profile do
             hash_including(profile: "test_profile", channel: "eng_alerts", text: "multi"),
           ).ordered
 
-          profile.call(channels: [:slack_development, :eng_alerts], text: "multi")
+          profile.call(channels: %i[slack_development eng_alerts], text: "multi")
         end
 
         it "returns true" do
           allow(SlackSender::DeliveryAxn).to receive(:call_async)
-          expect(profile.call(channels: [:slack_development, :eng_alerts], text: "multi")).to be true
+          expect(profile.call(channels: %i[slack_development eng_alerts], text: "multi")).to be true
         end
 
         context "with single-element array" do
@@ -961,7 +967,7 @@ RSpec.describe SlackSender::Profile do
               hash_including(channel: "eng_alerts", file_ids:),
             ).ordered
 
-            profile.call(channels: [:slack_development, :eng_alerts], files: [file_content])
+            profile.call(channels: %i[slack_development eng_alerts], files: [file_content])
           end
         end
 
@@ -974,7 +980,7 @@ RSpec.describe SlackSender::Profile do
               hash_including(channel: "eng_alerts", validate_known_channel: true),
             ).ordered
 
-            profile.call(channels: [:slack_development, :eng_alerts], text: "test")
+            profile.call(channels: %i[slack_development eng_alerts], text: "test")
           end
         end
 
@@ -987,7 +993,7 @@ RSpec.describe SlackSender::Profile do
               hash_including(channel: "C456"),
             ).ordered
 
-            profile.call(channels: ["C123", "C456"], text: "test")
+            profile.call(channels: %w[C123 C456], text: "test")
           end
         end
       end
@@ -1032,7 +1038,7 @@ RSpec.describe SlackSender::Profile do
       context "with channels: (multi-channel)" do
         it "raises ArgumentError with helpful message" do
           expect do
-            profile.call!(channels: [:slack_development, :eng_alerts], text: "multi")
+            profile.call!(channels: %i[slack_development eng_alerts], text: "multi")
           end.to raise_error(
             ArgumentError,
             /Multi-channel delivery via `channels:` is only supported for async calls/,
@@ -1041,7 +1047,7 @@ RSpec.describe SlackSender::Profile do
 
         it "suggests using call instead of call!" do
           expect do
-            profile.call!(channels: [:slack_development, :eng_alerts], text: "multi")
+            profile.call!(channels: %i[slack_development eng_alerts], text: "multi")
           end.to raise_error(
             ArgumentError,
             /Use `call` instead of `call!`/,

@@ -28,6 +28,7 @@ module SlackSender
   class InvalidArgumentsError < Error; end
 end
 
+require_relative "slack_sender/channel_normalizer"
 require_relative "slack_sender/profile"
 require_relative "slack_sender/profile_registry"
 require_relative "slack_sender/delivery_axn"

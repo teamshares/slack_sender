@@ -116,7 +116,7 @@ RSpec.describe SlackSender::Strategy do
             expects :message, type: String
 
             def call
-              slack message, channels: [:slack_development, :eng_alerts]
+              slack message, channels: %i[slack_development eng_alerts]
             end
           end
         end
@@ -135,7 +135,7 @@ RSpec.describe SlackSender::Strategy do
         context "with channels: in defaults" do
           let(:action_class) do
             build_axn do
-              use :slack, channels: [:slack_development, :eng_alerts], profile: :test_profile
+              use :slack, channels: %i[slack_development eng_alerts], profile: :test_profile
 
               def call
                 slack "Default multi-channel"
