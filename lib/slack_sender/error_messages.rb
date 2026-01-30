@@ -36,5 +36,6 @@ module SlackSender
 
     # Argument validation errors
     UNKNOWN_KWARGS = "Unknown argument(s): %s. Valid arguments are: %s"
+    FILE_AND_FILES_CONFLICT = "Cannot provide both file: and files:"
   end
 end

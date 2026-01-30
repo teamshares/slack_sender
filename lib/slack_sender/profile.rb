@@ -13,6 +13,7 @@ module SlackSender
       attachments
       icon_emoji
       thread_ts
+      file
       files
       profile
     ].freeze
@@ -178,11 +179,20 @@ module SlackSender
     def preprocess_call_kwargs(raw)
       raw.dup.tap do |kwargs|
         validate_known_kwargs!(kwargs)
+        normalize_file_to_files!(kwargs)
         validate_and_handle_profile_parameter!(kwargs)
         apply_default_channel!(kwargs)
         preprocess_channel!(kwargs)
         preprocess_blocks_and_attachments!(kwargs)
       end
+    end
+
+    def normalize_file_to_files!(kwargs)
+      return unless kwargs.key?(:file)
+
+      raise ArgumentError, ErrorMessages::FILE_AND_FILES_CONFLICT if kwargs.key?(:files)
+
+      kwargs[:files] = [kwargs.delete(:file)]
     end
 
     def validate_known_kwargs!(kwargs)

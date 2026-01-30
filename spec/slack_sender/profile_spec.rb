@@ -240,27 +240,61 @@ RSpec.describe SlackSender::Profile do
         it "does not raise for files" do
           expect { profile.public_send(method_name, channel: "C123", files: [StringIO.new("content")]) }.not_to raise_error
         end
+
+        it "does not raise for file (singular)" do
+          expect { profile.public_send(method_name, channel: "C123", file: StringIO.new("content")) }.not_to raise_error
+        end
+      end
+
+    end
+
+    shared_examples "normalizes file: to files:" do |method_name|
+      context "with file: parameter" do
+        it "normalizes file: to files: array" do
+          profile.public_send(method_name, channel: "C123", file: StringIO.new("content"))
+
+          expect(delivery_kwargs[:files]).to be_an(Array)
+          expect(delivery_kwargs[:files].length).to eq(1)
+          expect(delivery_kwargs).not_to have_key(:file)
+        end
+
+        it "raises ArgumentError when both file: and files: are provided" do
+          expect do
+            profile.public_send(method_name, channel: "C123", file: StringIO.new("one"), files: [StringIO.new("two")])
+          end.to raise_error(ArgumentError, /Cannot provide both file: and files:/)
+        end
       end
     end
 
     describe "#call" do
+      let(:delivery_kwargs) { nil }
+
       before do
         SlackSender::ProfileRegistry.all[profile.key] = profile
         allow(SlackSender.config).to receive(:async_backend_available?).and_return(true)
-        allow(SlackSender::DeliveryAxn).to receive(:call_async)
+        allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1_000_000)
+        allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+        allow(SlackSender::DeliveryAxn).to receive(:call_async) { |**kwargs| @delivery_kwargs = kwargs }
       end
 
+      let(:delivery_kwargs) { @delivery_kwargs }
+
       include_examples "validates unknown kwargs", :call
+      include_examples "normalizes file: to files:", :call
     end
 
     describe "#call!" do
       before do
-        allow(SlackSender::DeliveryAxn).to receive(:call!).and_return(
-          instance_double("Result", thread_ts: "123.456"),
-        )
+        allow(SlackSender::DeliveryAxn).to receive(:call!) { |**kwargs|
+          @delivery_kwargs = kwargs
+          instance_double("Result", thread_ts: "123.456")
+        }
       end
 
+      let(:delivery_kwargs) { @delivery_kwargs }
+
       include_examples "validates unknown kwargs", :call!
+      include_examples "normalizes file: to files:", :call!
     end
   end
 
@@ -534,77 +568,117 @@ RSpec.describe SlackSender::Profile do
         end
       end
 
-      context "with files (larger than inline threshold)" do
-        let(:file) { StringIO.new("file content") }
+      context "with file uploads" do
+        let(:file_content) { StringIO.new("file content") }
         let(:file_uploader) { instance_double(SlackSender::FileUploader) }
         let(:file_ids) { [{ "id" => "F123", "title" => "attachment 1" }] }
 
-        before do
-          # Set threshold low so file exceeds inline limit and triggers FileUploader path
-          allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
-          allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
-          allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
-          allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
-        end
-
-        it "uploads files to Slack synchronously via FileUploader" do
-          expect(SlackSender::FileUploader).to receive(:new).and_call_original
-          allow_any_instance_of(SlackSender::FileUploader).to receive(:upload_to_slack).and_return(file_ids)
-          allow(SlackSender::DeliveryAxn).to receive(:call_async)
-
-          profile.call(channel: "C123", files: [file])
-        end
-
-        it "passes file_ids instead of files to call_async" do
-          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
-            profile: "test_profile",
-            channel: "C123",
-            file_ids:,
-          )
-
-          profile.call(channel: "C123", files: [file])
-        end
-
-        it "does not include files in call_async kwargs" do
-          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
-            expect(kwargs).not_to have_key(:files)
-            expect(kwargs).to have_key(:file_ids)
+        shared_examples "async file upload behavior" do |file_param_style|
+          let(:file_kwargs) do
+            case file_param_style
+            when :singular then { file: file_content }
+            when :plural then { files: [file_content] }
+            end
           end
 
-          profile.call(channel: "C123", files: [file])
-        end
+          context "larger than inline threshold" do
+            before do
+              # Set threshold low so file exceeds inline limit and triggers FileUploader path
+              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
+              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+              allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
+              allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
+            end
 
-        context "with text and files" do
-          it "includes both text and file_ids" do
-            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
-              profile: "test_profile",
-              channel: "C123",
-              text: "Check out this file",
-              file_ids:,
-            )
+            it "uploads files to Slack synchronously via FileUploader" do
+              expect(SlackSender::FileUploader).to receive(:new).and_call_original
+              allow_any_instance_of(SlackSender::FileUploader).to receive(:upload_to_slack).and_return(file_ids)
+              allow(SlackSender::DeliveryAxn).to receive(:call_async)
 
-            profile.call(channel: "C123", text: "Check out this file", files: [file])
+              profile.call(channel: "C123", **file_kwargs)
+            end
+
+            it "passes file_ids instead of files to call_async" do
+              expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+                profile: "test_profile",
+                channel: "C123",
+                file_ids:,
+              )
+
+              profile.call(channel: "C123", **file_kwargs)
+            end
+
+            it "does not include files in call_async kwargs" do
+              expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+                expect(kwargs).not_to have_key(:files)
+                expect(kwargs).not_to have_key(:file)
+                expect(kwargs).to have_key(:file_ids)
+              end
+
+              profile.call(channel: "C123", **file_kwargs)
+            end
+
+            context "with text" do
+              it "includes both text and file_ids" do
+                expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+                  profile: "test_profile",
+                  channel: "C123",
+                  text: "Check out this file",
+                  file_ids:,
+                )
+
+                profile.call(channel: "C123", text: "Check out this file", **file_kwargs)
+              end
+            end
+
+            context "when FileUploader raises an error" do
+              before do
+                allow(file_uploader).to receive(:upload_to_slack).and_raise(
+                  Slack::Web::Api::Errors::SlackError.new("ratelimited"),
+                )
+              end
+
+              it "propagates the error to the caller" do
+                expect { profile.call(channel: "C123", **file_kwargs) }.to raise_error(
+                  Slack::Web::Api::Errors::SlackError,
+                )
+              end
+
+              it "does not enqueue the job" do
+                expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
+
+                expect { profile.call(channel: "C123", **file_kwargs) }.to raise_error(Slack::Web::Api::Errors::SlackError)
+              end
+            end
+          end
+
+          context "smaller than inline threshold" do
+            before do
+              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1_000_000)
+              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+            end
+
+            it "passes files directly to call_async (no FileUploader)" do
+              expect(SlackSender::FileUploader).not_to receive(:new)
+
+              expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+                expect(kwargs[:files]).to be_an(Array)
+                expect(kwargs[:files].first).to be_a(SlackSender::FileWrapper)
+                expect(kwargs).not_to have_key(:file_ids)
+                expect(kwargs).not_to have_key(:file)
+              end
+
+              profile.call(channel: "C123", **file_kwargs)
+            end
           end
         end
 
-        context "when FileUploader raises an error" do
-          before do
-            allow(file_uploader).to receive(:upload_to_slack).and_raise(
-              Slack::Web::Api::Errors::SlackError.new("ratelimited"),
-            )
-          end
+        context "with file: (singular)" do
+          include_examples "async file upload behavior", :singular
+        end
 
-          it "propagates the error to the caller" do
-            expect { profile.call(channel: "C123", files: [file]) }.to raise_error(
-              Slack::Web::Api::Errors::SlackError,
-            )
-          end
-
-          it "does not enqueue the job" do
-            expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
-
-            expect { profile.call(channel: "C123", files: [file]) }.to raise_error(Slack::Web::Api::Errors::SlackError)
-          end
+        context "with files: (plural)" do
+          include_examples "async file upload behavior", :plural
         end
 
         context "file size validation" do
@@ -613,14 +687,25 @@ RSpec.describe SlackSender::Profile do
             let(:large_file) { StringIO.new(large_content) }
 
             before do
+              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
+              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
               # Stub the bytesize to simulate a file > 1 GB
               allow_any_instance_of(String).to receive(:bytesize).and_return(2_000_000_000)
             end
 
-            it "raises an error before attempting upload" do
+            it "raises an error before attempting upload (files:)" do
               expect(SlackSender::FileUploader).not_to receive(:new)
 
               expect { profile.call(channel: "C123", files: [large_file]) }.to raise_error(
+                SlackSender::Error,
+                /exceeds Slack's maximum file size of 1 GB/,
+              )
+            end
+
+            it "raises an error before attempting upload (file:)" do
+              expect(SlackSender::FileUploader).not_to receive(:new)
+
+              expect { profile.call(channel: "C123", file: large_file) }.to raise_error(
                 SlackSender::Error,
                 /exceeds Slack's maximum file size of 1 GB/,
               )
@@ -631,6 +716,7 @@ RSpec.describe SlackSender::Profile do
             let(:medium_file) { StringIO.new("x" * 1000) }
 
             before do
+              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
               allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(500)
             end
 
@@ -652,11 +738,13 @@ RSpec.describe SlackSender::Profile do
           end
 
           context "when max_async_file_upload_size is nil (disabled)" do
-            let(:medium_file) { StringIO.new("x" * 1_000_000) }
+            let(:medium_file) { StringIO.new("x" * 1000) }
 
             before do
               allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(nil)
               allow(SlackSender.config).to receive(:max_inline_file_size).and_return(100)
+              allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
+              allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
               allow(SlackSender::DeliveryAxn).to receive(:call_async)
             end
 
@@ -667,27 +755,6 @@ RSpec.describe SlackSender::Profile do
         end
 
         context "inline vs upload threshold" do
-          context "when files are smaller than max_inline_file_size" do
-            let(:small_file) { StringIO.new("small") }
-
-            before do
-              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1_000_000)
-              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
-            end
-
-            it "passes files directly to call_async (no FileUploader)" do
-              expect(SlackSender::FileUploader).not_to receive(:new)
-
-              expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
-                expect(kwargs[:files]).to be_an(Array)
-                expect(kwargs[:files].first).to be_a(SlackSender::FileWrapper)
-                expect(kwargs).not_to have_key(:file_ids)
-              end
-
-              profile.call(channel: "C123", files: [small_file])
-            end
-          end
-
           context "when files exceed max_inline_file_size but within async limit" do
             let(:medium_file) { StringIO.new("x" * 1000) }
 

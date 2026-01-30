@@ -46,6 +46,12 @@ RSpec.describe SlackSender::Util do
       it { is_expected.to be false }
     end
 
+    context "when text is blank but file (singular) present" do
+      let(:kwargs) { { text: "", file: StringIO.new("content") } }
+
+      it { is_expected.to be false }
+    end
+
     context "when text is nil (not a String)" do
       let(:kwargs) { { text: nil } }
 
