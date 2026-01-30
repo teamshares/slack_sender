@@ -25,6 +25,7 @@ module SlackSender
         kwargs[:text].blank? &&
         kwargs[:blocks].blank? &&
         kwargs[:attachments].blank? &&
+        kwargs[:file].blank? &&
         kwargs[:files].blank?
     end
 

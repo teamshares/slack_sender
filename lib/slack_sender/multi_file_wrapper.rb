@@ -5,15 +5,10 @@ module SlackSender
     attr_reader :files
 
     def initialize(raw_files)
-      # If it's already an array, use it as-is
-      # If it's a single file-like object, wrap it in an array
-      # Otherwise, try Array() conversion (but this should be rare)
-      files_array = if raw_files.is_a?(Array)
-                      raw_files
-                    elsif FileWrapper.file_like?(raw_files)
-                      [raw_files]
-                    else
-                      Array(raw_files)
+      files_array = case raw_files
+                    when Array then raw_files
+                    when nil then []
+                    else [raw_files]
                     end
       @files = files_array.presence&.each_with_index&.map { |f, i| FileWrapper.wrap(f, i) } || []
     end

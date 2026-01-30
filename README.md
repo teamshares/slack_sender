@@ -218,17 +218,17 @@ SlackSender.call(
 
 ### File Uploads
 
-File uploads are supported with both synchronous (`call!`) and async (`call`) delivery.
+File uploads are supported with both synchronous (`call!`) and async (`call`) delivery. Use `file:` for a single file or `files:` for multiple files.
 
 ```ruby
-# Synchronous delivery (blocking)
+# Single file - use file: (singular)
 SlackSender.call!(
   channel: :reports,
   text: "Daily ops report attached",
-  files: [File.open("report.pdf")]
+  file: File.open("report.pdf")
 )
 
-# Multiple files (synchronous)
+# Multiple files - use files: (plural)
 SlackSender.call!(
   channel: :reports,
   text: "Daily ops report (details + raw export)",
@@ -255,16 +255,16 @@ Slack's `files_upload_v2` API requires channel IDs (e.g., `C024BE91L`, `D032AC32
 
 ```ruby
 # ✅ Works - using channel ID from profile
-SlackSender.call!(channel: :alerts, files: [file])
+SlackSender.call!(channel: :alerts, file: file)
 
 # ✅ Works - using channel ID directly
-SlackSender.call!(channel: "C024BE91L", files: [file])
+SlackSender.call!(channel: "C024BE91L", file: file)
 
 # ❌ Fails - @username not supported for file uploads
-SlackSender.call!(channel: "@username", files: [file])
+SlackSender.call!(channel: "@username", file: file)
 
 # ❌ Fails - #channel-name not supported for file uploads
-SlackSender.call!(channel: "#general", files: [file])
+SlackSender.call!(channel: "#general", file: file)
 ```
 
 To send files as a DM, use the DM channel ID (starts with `D`) which you can find in Slack's URL when viewing the conversation.
@@ -406,8 +406,13 @@ class Deployments::Finish
   on_failure { slack ":x: Deploy failed for `#{deployment.service}`", channel: :ops_alerts }
 
   def call
-    slack "Finalizing deploy for `#{deployment.service}`..." # Uses default channel
+    # slack() is async (background job) - recommended for fire-and-forget
+    slack "Finalizing deploy for `#{deployment.service}`..."
+
+    # slack!() is sync - use when you need the thread_ts
+    thread_ts = slack! "Starting rollout..."
     # ... rollout / status checks / persistence ...
+    slack "Rollout complete!", thread_ts: thread_ts
   end
 end
 ```
@@ -420,23 +425,30 @@ use :slack, channel: :general, profile: :support  # Use a specific SlackSender p
 use :slack                                # No default channel (must pass channel: each time)
 ```
 
-#### The `slack(...)` Method
+#### The `slack(...)` and `slack!(...)` Methods
 
-The strategy adds a `slack` instance method with flexible calling conventions:
+The strategy adds two instance methods for sending Slack messages:
+
+| Method | Delivery | Return Value | Use When |
+|--------|----------|--------------|----------|
+| `slack(...)` | Async (background job) | `true` or `false` | Default; enables auto-retry for rate limits |
+| `slack!(...)` | Sync (immediate) | Thread timestamp or `false` | You need the `thread_ts` return value |
 
 ```ruby
-# Positional text argument (sugar for text: kwarg)
+# Async delivery (recommended) - uses Sidekiq or ActiveJob
 slack "Hello world"
-
-# Override channel
 slack "Hello", channel: :other_channel
 
-# Full kwargs
-slack text: "Hello", channel: :ops_alerts, icon_emoji: "robot"
+# Sync delivery - immediate execution, returns thread_ts
+thread_ts = slack! "Starting deployment..."
+slack! "Deployment finished", thread_ts: thread_ts
 
-# With blocks or attachments
-slack channel: :ops_alerts, blocks: [{ type: "section", text: { type: "mrkdwn", text: "*Bold*" } }]
+# Full kwargs work with both methods
+slack text: "Hello", channel: :ops_alerts, icon_emoji: "robot"
+slack! channel: :ops_alerts, blocks: [{ type: "section", text: { type: "mrkdwn", text: "*Bold*" } }]
 ```
+
+**Note:** `slack(...)` requires an async backend to be configured (Sidekiq or ActiveJob). If no async backend is available, it raises `SlackSender::Error` with instructions to either use `slack!(...)` or configure an async backend.
 
 ### SlackSender::Notifier Base Class
 
@@ -826,7 +838,7 @@ report = generate_daily_report
 thread_ts = SlackSender.call!(
   channel: :reports,
   text: "Daily Report - #{Date.today}",
-  files: [report.to_file]
+  file: report.to_file
 )
 
 # Follow up in thread
@@ -883,12 +895,12 @@ A: Slack's file upload APIs require channel IDs, not usernames or channel names:
 
 ```ruby
 # ❌ These don't work for file uploads
-SlackSender.call!(channel: "@username", files: [file])
-SlackSender.call!(channel: "#general", files: [file])
+SlackSender.call!(channel: "@username", file: file)
+SlackSender.call!(channel: "#general", file: file)
 
 # ✅ Use channel IDs instead
-SlackSender.call!(channel: "C024BE91L", files: [file])  # Public channel
-SlackSender.call!(channel: "D032AC32T", files: [file])  # DM channel
+SlackSender.call!(channel: "C024BE91L", file: file)  # Public channel
+SlackSender.call!(channel: "D032AC32T", file: file)  # DM channel
 ```
 
 For DMs, find the DM channel ID (starts with `D`) from Slack's URL when viewing the conversation.
@@ -907,7 +919,7 @@ If you're hitting the async size limit, either:
 
 ```ruby
 # For large files, use synchronous delivery
-SlackSender.call!(channel: :alerts, files: [large_file])
+SlackSender.call!(channel: :alerts, file: large_file)
 
 # Or increase the async limit
 SlackSender.config.max_async_file_upload_size = 100_000_000  # 100 MB

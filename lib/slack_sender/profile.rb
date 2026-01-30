@@ -4,6 +4,20 @@ module SlackSender
   class Profile # rubocop:disable Metrics/ClassLength
     SUPPORTED_SANDBOX_BEHAVIORS = %i[redirect noop passthrough].freeze
 
+    # Valid kwargs accepted by Profile#call / Profile#call!
+    # These are validated early (before backgrounding) to catch typos like `test:` instead of `text:`
+    VALID_CALL_KWARGS = %i[
+      channel
+      text
+      blocks
+      attachments
+      icon_emoji
+      thread_ts
+      file
+      files
+      profile
+    ].freeze
+
     attr_reader :default_channel, :channels, :user_groups, :slack_client_config, :key, :sandbox
 
     def initialize(key:, token:, default_channel: nil, channels: {}, user_groups: {}, slack_client_config: {}, sandbox: {})
@@ -164,11 +178,32 @@ module SlackSender
 
     def preprocess_call_kwargs(raw)
       raw.dup.tap do |kwargs|
+        validate_known_kwargs!(kwargs)
+        normalize_file_to_files!(kwargs)
         validate_and_handle_profile_parameter!(kwargs)
         apply_default_channel!(kwargs)
         preprocess_channel!(kwargs)
         preprocess_blocks_and_attachments!(kwargs)
       end
+    end
+
+    def normalize_file_to_files!(kwargs)
+      return unless kwargs.key?(:file)
+
+      raise ArgumentError, ErrorMessages::FILE_AND_FILES_CONFLICT if kwargs.key?(:files)
+
+      kwargs[:files] = [kwargs.delete(:file)]
+    end
+
+    def validate_known_kwargs!(kwargs)
+      unknown_keys = kwargs.keys - VALID_CALL_KWARGS
+      return if unknown_keys.empty?
+
+      raise ArgumentError, format(
+        ErrorMessages::UNKNOWN_KWARGS,
+        unknown_keys.map(&:inspect).join(", "),
+        VALID_CALL_KWARGS.join(", "),
+      )
     end
 
     def apply_default_channel!(kwargs)
