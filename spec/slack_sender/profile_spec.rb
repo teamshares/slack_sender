@@ -245,7 +245,6 @@ RSpec.describe SlackSender::Profile do
           expect { profile.public_send(method_name, channel: "C123", file: StringIO.new("content")) }.not_to raise_error
         end
       end
-
     end
 
     shared_examples "normalizes file: to files:" do |method_name|

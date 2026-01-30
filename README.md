@@ -406,8 +406,13 @@ class Deployments::Finish
   on_failure { slack ":x: Deploy failed for `#{deployment.service}`", channel: :ops_alerts }
 
   def call
-    slack "Finalizing deploy for `#{deployment.service}`..." # Uses default channel
+    # slack() is async (background job) - recommended for fire-and-forget
+    slack "Finalizing deploy for `#{deployment.service}`..."
+
+    # slack!() is sync - use when you need the thread_ts
+    thread_ts = slack! "Starting rollout..."
     # ... rollout / status checks / persistence ...
+    slack "Rollout complete!", thread_ts: thread_ts
   end
 end
 ```
@@ -420,23 +425,30 @@ use :slack, channel: :general, profile: :support  # Use a specific SlackSender p
 use :slack                                # No default channel (must pass channel: each time)
 ```
 
-#### The `slack(...)` Method
+#### The `slack(...)` and `slack!(...)` Methods
 
-The strategy adds a `slack` instance method with flexible calling conventions:
+The strategy adds two instance methods for sending Slack messages:
+
+| Method | Delivery | Return Value | Use When |
+|--------|----------|--------------|----------|
+| `slack(...)` | Async (background job) | `true` or `false` | Default; enables auto-retry for rate limits |
+| `slack!(...)` | Sync (immediate) | Thread timestamp or `false` | You need the `thread_ts` return value |
 
 ```ruby
-# Positional text argument (sugar for text: kwarg)
+# Async delivery (recommended) - uses Sidekiq or ActiveJob
 slack "Hello world"
-
-# Override channel
 slack "Hello", channel: :other_channel
 
-# Full kwargs
-slack text: "Hello", channel: :ops_alerts, icon_emoji: "robot"
+# Sync delivery - immediate execution, returns thread_ts
+thread_ts = slack! "Starting deployment..."
+slack! "Deployment finished", thread_ts: thread_ts
 
-# With blocks or attachments
-slack channel: :ops_alerts, blocks: [{ type: "section", text: { type: "mrkdwn", text: "*Bold*" } }]
+# Full kwargs work with both methods
+slack text: "Hello", channel: :ops_alerts, icon_emoji: "robot"
+slack! channel: :ops_alerts, blocks: [{ type: "section", text: { type: "mrkdwn", text: "*Bold*" } }]
 ```
+
+**Note:** `slack(...)` requires an async backend to be configured (Sidekiq or ActiveJob). If no async backend is available, it raises `SlackSender::Error` with instructions to either use `slack!(...)` or configure an async backend.
 
 ### SlackSender::Notifier Base Class
 

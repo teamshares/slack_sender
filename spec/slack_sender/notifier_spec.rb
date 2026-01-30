@@ -9,6 +9,12 @@ RSpec.describe SlackSender::Notifier do
     allow(client_dbl).to receive(:chat_postMessage).and_return({ "ts" => "1234567890.123456" })
     allow(SlackSender.config).to receive(:in_production?).and_return(true)
     allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+    # Enable async backend for Notifier tests (Notifier uses slack() which is async)
+    allow(SlackSender.config).to receive(:async_backend_available?).and_return(true)
+    # Stub call_async to actually call synchronously for test verification
+    allow(SlackSender::DeliveryAxn).to receive(:call_async) do |**kwargs|
+      SlackSender::DeliveryAxn.call!(**kwargs)
+    end
 
     SlackSender::ProfileRegistry.register(:default, {
                                             token: "test-token",
