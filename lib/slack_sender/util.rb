@@ -39,11 +39,21 @@ module SlackSender
       # Check for retry headers from Slack (e.g., rate limits)
       if exception.respond_to?(:response_headers) && exception.response_headers.is_a?(Hash)
         retry_after = exception.response_headers["Retry-After"] || exception.response_headers["retry-after"]
-        return retry_after.to_i if retry_after.present?
+        return add_jitter(retry_after.to_i) if retry_after.present?
       end
 
       # Default: let the backend use its default retry behavior
       nil
+    end
+
+    # Adds random jitter to a delay to prevent thundering herd
+    # @param delay [Integer] The base delay in seconds
+    # @return [Integer] The delay with jitter added (0-30% extra)
+    def self.add_jitter(delay)
+      return delay if delay <= 0
+
+      jitter = (delay * rand * 0.3).ceil
+      delay + jitter
     end
 
     # Extracts the needed scope from a MissingScope exception.
