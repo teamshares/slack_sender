@@ -147,6 +147,10 @@ RSpec.describe SlackSender::DeliveryAxn::AsyncConfiguration do
   end
 
   describe "configuration values" do
+    it "sets async_exception_reporting to :only_exhausted (report only when retries exhausted)" do
+      expect(SlackSender::DeliveryAxn._async_exception_reporting).to eq(:only_exhausted)
+    end
+
     describe "sidekiq" do
       it "configures retry: 5 (retries are enabled)" do
         # This is a documentation test - the async call includes retry: 5

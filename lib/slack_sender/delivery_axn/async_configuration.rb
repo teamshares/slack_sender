@@ -8,6 +8,9 @@ module SlackSender
       end
 
       def _configure_async_backend
+        # Only report to axn's on_exception when retries are exhausted (not on each attempt or ratelimit retries)
+        async_exception_reporting :only_exhausted
+
         backend = SlackSender.config.async_backend
 
         # No backend configured - will raise error when deliver is called

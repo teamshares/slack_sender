@@ -161,7 +161,9 @@ RSpec.describe SlackSender::Util do
         error
       end
 
-      it { is_expected.to eq(30) }
+      it "returns base delay plus jitter (0-30% extra)" do
+        expect(result).to be_between(30, 39)
+      end
     end
 
     context "with exception containing lowercase retry-after header" do
@@ -171,7 +173,9 @@ RSpec.describe SlackSender::Util do
         error
       end
 
-      it { is_expected.to eq(45) }
+      it "returns base delay plus jitter (0-30% extra)" do
+        expect(result).to be_between(45, 59)
+      end
     end
 
     context "with exception with response_headers but no Retry-After" do
@@ -214,6 +218,40 @@ RSpec.describe SlackSender::Util do
       let(:exception) { Slack::Web::Api::Errors::SlackError.new("some_other_error") }
 
       it { is_expected.to be_nil }
+    end
+  end
+
+  describe ".add_jitter" do
+    subject(:result) { described_class.add_jitter(delay) }
+
+    context "with positive delay" do
+      let(:delay) { 30 }
+
+      it "returns value >= base delay" do
+        expect(result).to be >= delay
+      end
+
+      it "returns value <= base delay + 30%" do
+        expect(result).to be <= (delay * 1.3).ceil
+      end
+
+      it "adds variable jitter across multiple calls" do
+        results = 100.times.map { described_class.add_jitter(delay) }
+        # With 100 samples, we should see some variation (not all identical)
+        expect(results.uniq.size).to be > 1
+      end
+    end
+
+    context "with zero delay" do
+      let(:delay) { 0 }
+
+      it { is_expected.to eq(0) }
+    end
+
+    context "with negative delay" do
+      let(:delay) { -5 }
+
+      it { is_expected.to eq(-5) }
     end
   end
 end
