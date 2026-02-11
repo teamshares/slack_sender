@@ -249,6 +249,27 @@ RSpec.describe SlackSender do
     end
   end
 
+  describe ".client" do
+    context "when default profile is set" do
+      let!(:profile) do
+        described_class.register(
+          token: "TEST_TOKEN",
+          sandbox: { channel: { replace_with: "C123" } },
+        )
+      end
+
+      it "delegates to default_profile.client" do
+        expect(described_class.client).to eq(profile.client)
+      end
+    end
+
+    context "when default profile is not set" do
+      it "raises an error" do
+        expect { described_class.client }.to raise_error(SlackSender::Error, /No default profile set/)
+      end
+    end
+  end
+
   describe ".format_group_mention" do
     let!(:profile) do
       described_class.register(

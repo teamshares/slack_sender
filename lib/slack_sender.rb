@@ -60,6 +60,7 @@ module SlackSender
       raise Error, "No default profile set. Call SlackSender.register(...) first"
     end
 
+    def client = default_profile.client
     def call(**) = default_profile.call(**)
     def call!(**) = default_profile.call!(**)
     def format_group_mention(key) = default_profile.format_group_mention(key)
