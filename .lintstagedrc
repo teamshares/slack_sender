@@ -1,0 +1,1 @@
+{"*.rb":["bundle exec rubocop -A -c .rubocop.yml --force-exclusion"]}
