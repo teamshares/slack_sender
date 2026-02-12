@@ -132,7 +132,7 @@ module SlackSender
       DeliveryAxn.call!(profile: self, **kwargs).thread_ts
     end
 
-    def format_group_mention(key)
+    def group_link(key)
       group_id = if key.is_a?(Symbol)
                    user_groups[key] || raise("Unknown user group: #{key}")
                  else

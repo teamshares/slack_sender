@@ -1274,7 +1274,7 @@ RSpec.describe SlackSender::Profile do
     end
   end
 
-  describe "#format_group_mention" do
+  describe "#group_link" do
     before do
       allow(SlackSender.config).to receive(:sandbox_mode?).and_return(sandbox_mode?)
     end
@@ -1286,7 +1286,7 @@ RSpec.describe SlackSender::Profile do
         let(:profile) { build(:profile, user_groups: { eng_team: "S123ABC" }) }
 
         it "returns formatted group link for user group symbol" do
-          result = profile.format_group_mention(:eng_team)
+          result = profile.group_link(:eng_team)
 
           expect(result).to eq("<!subteam^S123ABC>")
         end
@@ -1294,7 +1294,7 @@ RSpec.describe SlackSender::Profile do
 
       context "with string ID" do
         it "returns formatted group link for string ID" do
-          result = profile.format_group_mention("S123ABC")
+          result = profile.group_link("S123ABC")
 
           expect(result).to eq("<!subteam^S123ABC>")
         end
@@ -1304,7 +1304,7 @@ RSpec.describe SlackSender::Profile do
         let(:profile) { build(:profile, sandbox: { user_group: { replace_with: "S_DEV_GROUP" } }, user_groups: { eng_team: "S123ABC" }) }
 
         it "ignores sandbox user_group and returns requested group link" do
-          result = profile.format_group_mention(:eng_team)
+          result = profile.group_link(:eng_team)
 
           expect(result).to eq("<!subteam^S123ABC>")
         end
@@ -1312,7 +1312,7 @@ RSpec.describe SlackSender::Profile do
 
       context "with unknown symbol key" do
         it "raises error" do
-          expect { profile.format_group_mention(:unknown_group) }.to raise_error("Unknown user group: unknown_group")
+          expect { profile.group_link(:unknown_group) }.to raise_error("Unknown user group: unknown_group")
         end
       end
     end
@@ -1325,7 +1325,7 @@ RSpec.describe SlackSender::Profile do
 
         context "with symbol key" do
           it "returns sandbox user_group link instead of requested group" do
-            result = profile.format_group_mention(:eng_team)
+            result = profile.group_link(:eng_team)
 
             expect(result).to eq("<!subteam^S_DEV_GROUP>")
           end
@@ -1333,7 +1333,7 @@ RSpec.describe SlackSender::Profile do
 
         context "with string ID" do
           it "returns sandbox user_group link instead of requested ID" do
-            result = profile.format_group_mention("S123ABC")
+            result = profile.group_link("S123ABC")
 
             expect(result).to eq("<!subteam^S_DEV_GROUP>")
           end
@@ -1344,7 +1344,7 @@ RSpec.describe SlackSender::Profile do
         let(:profile) { build(:profile, sandbox: {}, user_groups: { eng_team: "S123ABC" }) }
 
         it "returns the requested group link" do
-          result = profile.format_group_mention(:eng_team)
+          result = profile.group_link(:eng_team)
 
           expect(result).to eq("<!subteam^S123ABC>")
         end

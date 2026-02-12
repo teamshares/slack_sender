@@ -136,14 +136,14 @@ SlackSender.call(
 )
 ```
 
-**Note:** Text is parsed as [Slack mrkdwn](https://api.slack.com/reference/surfaces/formatting) by default. For formatting user mentions, channels, links, and other special content, use the `Slack::Messages::Formatting` helpers from [slack-ruby-client](https://github.com/slack-ruby/slack-ruby-client#message-formatting):
+**Note:** Text is parsed as [Slack mrkdwn](https://api.slack.com/reference/surfaces/formatting) by default. For formatting user mentions, channels, links, and other special content, use the `Slack::Messages::Formatting` helpers from [slack-ruby-client](https://github.com/slack-ruby/slack-ruby-client#message-formatting). For user group mentions, use `SlackSender.group_link` instead—it's sandbox-aware and supports symbol keys from your profile's `user_groups` registry.
 
 ```ruby
 SlackSender.call(
   channel: :ops_alerts,
   text: [
-    ":rotating_light: Incident acknowledged by #{Slack::Messages::Formatting.user(user.slack_id)}",
-    Slack::Messages::Formatting.url('https://status.example.com/incidents/123', 'Incident timeline'),
+    ":rotating_light: Incident acknowledged by #{Slack::Messages::Formatting.user_link(user.slack_id)}",
+    Slack::Messages::Formatting.url_link('Incident timeline', 'https://status.example.com/incidents/123'),
   ].join("\n")
 )
 ```
@@ -342,14 +342,14 @@ thread_ts = SlackSender.call!(
 
 ### User Group Mentions
 
-Format user group mentions (automatically redirects to sandbox user_group when in sandbox mode):
+Format user group mentions with `SlackSender.group_link`. This is a sandbox-aware equivalent of `Slack::Messages::Formatting.group_link`—it automatically redirects to the sandbox user_group when in sandbox mode, preventing accidental pings to production teams during development.
 
 ```ruby
-SlackSender.format_group_mention(:on_call)
-# => "<!subteam^S1234567890|@on_call>"
+SlackSender.group_link(:on_call)
+# => "<!subteam^S1234567890>"
 ```
 
-If `sandbox.user_group.replace_with` is configured and the app is in sandbox mode (per `config.sandbox_mode?`), `format_group_mention` will replace the requested group with the sandbox user_group instead, similar to how sandbox channel redirects messages:
+If `sandbox.user_group.replace_with` is configured and the app is in sandbox mode (per `config.sandbox_mode?`), `group_link` will replace the requested group with the sandbox user_group instead:
 
 ```ruby
 SlackSender.register(
@@ -363,7 +363,7 @@ SlackSender.register(
 )
 
 # In sandbox mode, this returns the sandbox user_group mention
-SlackSender.format_group_mention(:engineers)
+SlackSender.group_link(:engineers)
 # => "<!subteam^S_DEV_GROUP>"
 ```
 
