@@ -15,12 +15,18 @@ module SlackSender
     attr_writer :sandbox_mode
     attr_accessor :enabled, :silence_archived_channel_exceptions
 
+    # Whether to autoload files in app/slack_notifiers under the SlackNotifiers namespace.
+    # When true (default): app/slack_notifiers/foo.rb defines SlackNotifiers::Foo
+    # When false: app/slack_notifiers/foo.rb defines Foo (standard Rails behavior)
+    attr_accessor :use_slack_notifiers_namespace
+
     def initialize
       # Default values
       @enabled = true
       @sandbox_default_behavior = :noop
       @max_inline_file_size = DEFAULT_MAX_INLINE_FILE_SIZE
       @max_async_file_upload_size = DEFAULT_MAX_ASYNC_FILE_UPLOAD_SIZE
+      @use_slack_notifiers_namespace = true
     end
 
     def sandbox_mode?

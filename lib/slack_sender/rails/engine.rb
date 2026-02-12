@@ -10,14 +10,20 @@ if defined?(Rails) && Rails.const_defined?(:Engine)
           notifiers_path = app.root.join("app/slack_notifiers")
           next unless File.directory?(notifiers_path)
 
-          # Ensure the SlackNotifiers namespace module exists
-          namespace = if Object.const_defined?(:SlackNotifiers)
-                        Object.const_get(:SlackNotifiers)
-                      else
-                        Object.const_set(:SlackNotifiers, Module.new)
-                      end
+          if SlackSender.config.use_slack_notifiers_namespace
+            # Namespace mode: app/slack_notifiers/foo.rb -> SlackNotifiers::Foo
+            # Ensure the SlackNotifiers namespace module exists
+            namespace = if Object.const_defined?(:SlackNotifiers)
+                          Object.const_get(:SlackNotifiers)
+                        else
+                          Object.const_set(:SlackNotifiers, Module.new)
+                        end
 
-          Rails.autoloaders.main.push_dir(notifiers_path, namespace:)
+            Rails.autoloaders.main.push_dir(notifiers_path, namespace:)
+          else
+            # Standard Rails behavior: app/slack_notifiers/foo.rb -> Foo
+            Rails.autoloaders.main.push_dir(notifiers_path)
+          end
         end
       end
     end

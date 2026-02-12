@@ -25,6 +25,22 @@ RSpec.describe SlackSender::Configuration do
     end
   end
 
+  describe "#use_slack_notifiers_namespace" do
+    it "defaults to true" do
+      expect(config.use_slack_notifiers_namespace).to be true
+    end
+
+    it "can be set to false" do
+      config.use_slack_notifiers_namespace = false
+      expect(config.use_slack_notifiers_namespace).to be false
+    end
+
+    it "can be set to true explicitly" do
+      config.use_slack_notifiers_namespace = true
+      expect(config.use_slack_notifiers_namespace).to be true
+    end
+  end
+
   describe "#sandbox_mode?" do
     context "when @sandbox_mode is explicitly set" do
       it "returns true when set to true" do

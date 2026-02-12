@@ -620,6 +620,11 @@ SlackSender.configure do |config|
 
   # Silence archived channel exceptions (default: false)
   config.silence_archived_channel_exceptions = false
+
+  # Control autoloading namespace for app/slack_notifiers (default: true)
+  # When true:  app/slack_notifiers/foo.rb -> SlackNotifiers::Foo
+  # When false: app/slack_notifiers/foo.rb -> Foo (standard Rails behavior)
+  config.use_slack_notifiers_namespace = true
 end
 ```
 
@@ -636,6 +641,7 @@ end
 | `silence_archived_channel_exceptions` | `Boolean` | `false` | If `true`, silently ignores `IsArchived` errors instead of reporting them |
 | `max_inline_file_size` | `Integer` | `524_288` (512 KB) | Max total file size to serialize directly to job payload. Files larger than this are uploaded to Slack first. |
 | `max_async_file_upload_size` | `Integer` or `nil` | `26_214_400` (25 MB) | Max total file size for async uploads. Exceeding raises error immediately. Set to `nil` to disable (only Slack's 1 GB limit applies). |
+| `use_slack_notifiers_namespace` | `Boolean` | `true` | When `true`, files in `app/slack_notifiers` are autoloaded under the `SlackNotifiers` namespace (e.g., `SlackNotifiers::Foo`). When `false`, uses standard Rails autoloading (e.g., `Foo`). |
 
 #### Profile Configuration (`SlackSender.register`)
 
