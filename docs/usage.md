@@ -300,7 +300,7 @@ Rate limit handling works with both Sidekiq and ActiveJob backends.
 The following errors are not retried (discarded immediately):
 - `NotInChannel` - Bot not in channel
 - `ChannelNotFound` - Channel doesn't exist
-- `IsArchived` - Channel is archived (unless `silence_archived_channel_exceptions` is true)
+- `IsArchived` - Channel is archived
 
 ---
 
@@ -310,9 +310,11 @@ SlackSender automatically handles common Slack API errors:
 
 - **Not In Channel**: Logs warning and re-raises (non-retryable)
 - **Channel Not Found**: Logs warning and re-raises (non-retryable)
-- **Channel Is Archived**: Logs warning and re-raises. Can be silently ignored via `config.silence_archived_channel_exceptions = true`
+- **Channel Is Archived**: Logs warning and re-raises (or silently ignored if `config.silence_archived_channel_exceptions = true`)
+
+If sent async (via `call`):
 - **Rate Limits**: Automatically retries with delay from `Retry-After` header (up to 5 retries)
-- **Other Slack API Errors**: Logs warning and re-raises
+- **Other Slack API Errors**: Logs warning and re-raises (will retry via background processor)
 
 ---
 

@@ -10,7 +10,7 @@
 
 1. Ensure `SlackSender.config.enabled` is `true` (default)
 2. Verify your profile is registered: `SlackSender.profile(:default)`
-3. Check that an async backend is available if using `call` (not `call!`)
+3. Check that an async backend is available if using `call` (not necessary for `call!`)
 4. Verify your Slack token is valid and has the required scopes
 
 ### Messages Work in Production but Not in Development
@@ -27,12 +27,11 @@ If sandbox channel is configured, all messages are redirected there when in sand
 
 The bot must be invited to the channel.
 
-**Options:**
+**Resolution:**
 
-1. Invite the bot to the channel manually
-2. See: https://stackoverflow.com/a/68475477
+*  Invite the bot to the channel (see [stackoverflow](https://stackoverflow.com/a/68475477))
 
-### "missing_scope" Errors
+### `missing_scope` Errors
 
 Your Slack app is missing required OAuth scopes. The error message will tell you which scope is needed:
 
@@ -77,10 +76,7 @@ File uploads with async delivery (`call`) are supported, but have size limits:
 **If you're hitting the async size limit:**
 
 ```ruby
-# For large files, use synchronous delivery
-SlackSender.call!(channel: :alerts, file: large_file)
-
-# Or increase the async limit
+# Trying increasing the async limit
 SlackSender.config.max_async_file_upload_size = 100_000_000  # 100 MB
 ```
 
@@ -100,7 +96,7 @@ Yes, use `channels:` (plural) with async delivery:
 SlackSender.call(channels: [:alerts, :ops], text: "Broadcast message")
 ```
 
-Multi-channel is only supported for async (`call`). Sync (`call!`) requires sending to each channel individually. Files are uploaded once and shared to all channels efficiently.
+Multi-channel is only supported for async (`call`). Sync (`call!`) requires sending to each channel individually (to avoid confusion about how to report on partial failures). Files are uploaded once and shared to all channels efficiently.
 
 ### Can I use multiple Slack workspaces?
 
@@ -170,9 +166,8 @@ allow(SlackSender.profile(:default)).to receive(:call!).and_return("1234567890.1
 
 - **Ruby**: >= 3.2.1 (uses endless methods from Ruby 3.0+ and literal value omission from 3.1+)
 - **Dependencies**:
-  - `axn` (0.1.0-alpha.3)
+  - `axn` (>= 0.1.0-alpha.4.1)
   - `slack-ruby-client` (latest)
 - **Optional dependencies**:
-  - `sidekiq` (for async delivery)
-  - `active_job` (for async delivery)
+  - `sidekiq` or `active_job` (for async delivery)
   - `active_storage` (for ActiveStorage::Attachment file support)
