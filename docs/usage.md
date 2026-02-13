@@ -72,6 +72,10 @@ SlackSender.call(text: "Alert!")                       # Uses default_channel
 SlackSender.call(channel: :ops_alerts, text: "Alert!") # Explicit channel
 ```
 
+### Sandbox Mode
+
+To prevent accidental notifications in development or staging environments, you can enable sandbox mode. When active, all messages—regardless of their target channel—are redirected to a single "sandbox" channel. This ensures you can test notifications safely without spamming real users.
+
 ---
 
 ## Rich Messages
@@ -146,9 +150,9 @@ SlackSender.call(
 )
 ```
 
-### Channel ID Required
+### ⚠️ Channel ID Required
 
-Slack's `files_upload_v2` API requires channel IDs (e.g., `C024BE91L`, `D032AC32T`), not usernames or channel names:
+Unlike normal message sending, Slack's `files_upload_v2` API requires channel _IDs_ (e.g., `C024BE91L`, `D032AC32T`) and does _not_ support usernames or channel names:
 
 ```ruby
 # Works - using channel ID from profile
@@ -223,7 +227,7 @@ SlackSender.call(
 ```
 
 **Key behaviors:**
-- Multi-channel delivery is only supported via async (`call`). Using `call!` with `channels:` raises an error
+- Multi-channel delivery is only supported via async (`call`). Using `call!` with `channels:` raises an error (due to complexity in handling partial failures)
 - Files are uploaded once and shared to all channels efficiently
 - Each channel receives a separate background job with independent retry handling
 - Single-element arrays (e.g., `channels: [:ops_alerts]`) are normalized to `channel:`
@@ -235,7 +239,7 @@ SlackSender.call!(channels: [:a, :b], text: "...")  # Raises ArgumentError
 # Use async instead
 SlackSender.call(channels: [:a, :b], text: "...")
 
-# Or send individually if you need sync
+# Or send individually if you need sync (but beware :b may fail with e.g. a ratelimit error after :a: has already been delivered)
 [:a, :b].each { |ch| SlackSender.call!(channel: ch, text: "...") }
 ```
 
@@ -353,7 +357,7 @@ SlackSender.call(
 ### Scheduled Reports with File Upload
 
 ```ruby
-# Generate and send report (synchronous for file upload)
+# Generate and send report (synchronous for thread_ts)
 report = generate_daily_report
 thread_ts = SlackSender.call!(
   channel: :reports,
@@ -368,3 +372,23 @@ SlackSender.call(
   thread_ts: thread_ts
 )
 ```
+
+### Dedicated Notifiers
+
+For complex notifications, you can simplify your code by creating dedicated notifier classes using `SlackSender::Notifier`. This allows you to encapsulate logic, use callbacks, and keep your business logic clean.
+
+```ruby
+class DeployNotifier < SlackSender::Notifier
+  expects :service_name
+
+  notify do
+    channel :deployments
+    text { ":rocket: #{service_name} deployed successfully!" }
+  end
+end
+
+# Usage
+DeployNotifier.call(service_name: "payment-service")
+```
+
+See [SlackSender::Notifier Base Class](axn_integration.md#slacksendernotifier-base-class) for detailed documentation on building dedicated notifiers.
