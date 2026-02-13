@@ -23,7 +23,17 @@ bundle install
 - A Slack Bot User OAuth Token with `chat:write` scope (see [Configuration](docs/configuration.md#required-slack-scopes) for full scope list)
 - For async delivery: Sidekiq or ActiveJob (auto-detected)
 
-## Quick Start
+## Quick Start - Minimal
+
+```ruby
+SlackSender.register(token: ENV['SLACK_BOT_TOKEN'])
+```
+
+```ruby
+SlackSender.call!(channel: "some_channel_name", text: "Hi there")
+```
+
+## Quick Start - Realistic
 
 ### 1. Register a Profile
 
@@ -51,7 +61,7 @@ thread_ts = SlackSender.call!(channel: :deployments, text: ":rocket: Deploy star
 SlackSender.call(channel: :deployments, text: "Deploy complete!", thread_ts:)
 ```
 
-That's it. SlackSender handles rate limits, retries, and sandbox redirection automatically.
+That's it. SlackSender handles rate limits, retries, and sandbox redirection (if configured, all messages sent from non-production environments will be delivered to your `replace_with` channel) automatically.
 
 ## Documentation
 
@@ -74,7 +84,7 @@ That's it. SlackSender handles rate limits, retries, and sandbox redirection aut
 ## Development
 
 ```bash
-bin/setup        # Install dependencies
+bin/setup         # Install dependencies
 bundle exec rspec # Run tests
 ```
 
@@ -85,4 +95,3 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/teamsh
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-# test
