@@ -1,6 +1,7 @@
 ## [Unreleased]
 
-## [0.1.0.alpha] - 2026-01-05
+* N/A
 
-- Initial alpha release
-- **Note**: This is a pre-release version. API may change before stable release.
+## [0.1.0] - 2026-02-19
+
+- Initial release
