@@ -155,7 +155,7 @@ allow(SlackSender.profile(:default)).to receive(:call!).and_return("1234567890.1
 
 ## Compatibility
 
-- **Ruby**: >= 3.2.1 (uses endless methods from Ruby 3.0+ and literal value omission from 3.1+)
+- **Ruby**: >= 3.2.1
 - **Dependencies**:
   - `axn` (>= 0.1.0-alpha.4.1, < 0.2.0)
   - `slack-ruby-client` (latest)
