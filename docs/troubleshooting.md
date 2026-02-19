@@ -10,14 +10,15 @@
 
 1. Ensure `SlackSender.config.enabled` is `true` (default)
 2. Verify your profile is registered: `SlackSender.profile(:default)`
-3. Check that an async backend is available if using `call` (not necessary for `call!`)
-4. Verify your Slack token is valid and has the required scopes
+3. Check `SlackSender.config.sandbox_mode?` -- if `true`, check configured [`sandbox.behavior`](./configuration.md#sandbox-mode)
+4. Check that an async backend is available if using `call` (not necessary for `call!`)
+5. Verify your Slack token is valid and has the required scopes
 
 ### Messages Work in Production but Not in Development
 
-If sandbox channel is configured, all messages are redirected there when in sandbox mode.
+When `SlackSender.config.sandbox_mode?` is enabled (by default, if `Rails.env.production?` is false), the configured [`sandbox.behavior`](./configuration.md#sandbox-mode) will apply.  This likely means logging but skipping send (if `:noop`) or redirecting to a specific channel.
 
-**Check:**
+**If messages are not received in the sandbox channel, check:**
 
 1. `SlackSender.config.sandbox_mode?` — should be `true` in development
 2. Your `sandbox.channel.replace_with` channel ID is correct
@@ -112,7 +113,7 @@ SlackSender.profile(:workspace2).call(...)
 
 ### How are rate limits handled?
 
-SlackSender automatically detects rate limit errors and retries with the delay specified in Slack's `Retry-After` header. Retries happen up to 5 times before giving up.
+When sent async, SlackSender automatically detects rate limit errors and retries with the delay specified in Slack's `Retry-After` header. Retries happen up to 5 times before giving up.
 
 ### What errors are retried vs discarded?
 
@@ -143,17 +144,7 @@ Use `call` by default. Use `call!` when you need the `thread_ts` for threading.
 
 ### How do I test SlackSender in my specs?
 
-Use the `:noop` sandbox behavior to prevent actual Slack API calls:
-
-```ruby
-# In spec_helper.rb or rails_helper.rb
-SlackSender.configure do |config|
-  config.sandbox_mode = true
-  config.sandbox_default_behavior = :noop
-end
-```
-
-Or stub at the profile level:
+Stub at the profile level:
 
 ```ruby
 allow(SlackSender.profile(:default)).to receive(:call).and_return(true)
@@ -166,7 +157,7 @@ allow(SlackSender.profile(:default)).to receive(:call!).and_return("1234567890.1
 
 - **Ruby**: >= 3.2.1 (uses endless methods from Ruby 3.0+ and literal value omission from 3.1+)
 - **Dependencies**:
-  - `axn` (>= 0.1.0-alpha.4.1)
+  - `axn` (>= 0.1.0-alpha.4.1, < 0.2.0)
   - `slack-ruby-client` (latest)
 - **Optional dependencies**:
   - `sidekiq` or `active_job` (for async delivery)

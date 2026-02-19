@@ -6,7 +6,7 @@ This guide covers global configuration, profile registration, and sandbox mode s
 
 ## Global Configuration
 
-Configure SlackSender behavior via `SlackSender.configure`:
+Configure SlackSender behavior via `SlackSender.configure` (e.g. in a Rails initializer):
 
 ```ruby
 SlackSender.configure do |config|
@@ -22,8 +22,8 @@ SlackSender.configure do |config|
   # Options: :noop (default), :redirect, :passthrough
   config.sandbox_default_behavior = :noop
 
-  # Enable/disable SlackSender globally
-  config.enabled = true
+  # Enable/disable SlackSender globally (default: true)
+  config.enabled = ENV["DISABLE_SLACK"] != "1"
 
   # Silence archived channel exceptions (default: false)
   config.silence_archived_channel_exceptions = false

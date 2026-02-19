@@ -10,13 +10,7 @@ This guide covers sending messages, file uploads, threading, and advanced delive
 # Simple text message
 SlackSender.call(
   channel: :ops_alerts,
-  text: ":warning: Redis latency is elevated"
-)
-
-# With markdown formatting
-SlackSender.call(
-  channel: :deployments,
-  text: "Deploy started by *#{user.name}* for `#{ENV.fetch('APP_NAME', 'my-app')}`"
+  text: ":warning: Redis latency is *elevated*"
 )
 ```
 
@@ -80,6 +74,9 @@ To prevent accidental notifications in development or staging environments, you 
 
 ## Rich Messages
 
+SlackSender passes blocks, attachments, and icon_emoji through [directly to slack-ruby-client](https://www.rubydoc.info/gems/slack-ruby-client/Slack/Web/Api/Endpoints/Chat#chat_postMessage-instance_method).
+
+
 ### Blocks
 
 ```ruby
@@ -96,6 +93,7 @@ SlackSender.call(
 
 ### Attachments
 
+
 ```ruby
 SlackSender.call(
   channel: :ops_alerts,
@@ -109,6 +107,7 @@ SlackSender.call(
 ```
 
 ### Custom Emoji
+
 
 ```ruby
 SlackSender.call(
@@ -239,7 +238,7 @@ SlackSender.call!(channels: [:a, :b], text: "...")  # Raises ArgumentError
 # Use async instead
 SlackSender.call(channels: [:a, :b], text: "...")
 
-# Or send individually if you need sync (but beware :b may fail with e.g. a ratelimit error after :a: has already been delivered)
+# Or send individually if you need sync (but beware :b may fail with e.g. a ratelimit error after :a has already been delivered)
 [:a, :b].each { |ch| SlackSender.call!(channel: ch, text: "...") }
 ```
 
@@ -272,7 +271,7 @@ SlackSender.group_link(:engineers)
 
 ### Other Formatting Helpers
 
-For user mentions, channels, links, and other formatting, use the `Slack::Messages::Formatting` helpers from [slack-ruby-client](https://github.com/slack-ruby/slack-ruby-client#message-formatting):
+For user mentions, channels, links, and other formatting, use the `Slack::Messages::Formatting` helpers provided by the underlying [slack-ruby-client](https://github.com/slack-ruby/slack-ruby-client#message-formatting):
 
 ```ruby
 SlackSender.call(
@@ -292,29 +291,21 @@ When using async delivery, SlackSender automatically:
 
 - Detects rate limit errors from Slack API responses
 - Extracts `Retry-After` header value
-- Schedules retry with appropriate delay
+- Schedules retry with appropriate delay (+ jitter)
 - Retries up to 5 times before giving up
 
 Rate limit handling works with both Sidekiq and ActiveJob backends.
-
-The following errors are not retried (discarded immediately):
-- `NotInChannel` - Bot not in channel
-- `ChannelNotFound` - Channel doesn't exist
-- `IsArchived` - Channel is archived
 
 ---
 
 ## Error Handling
 
-SlackSender automatically handles common Slack API errors:
+The following errors will log warning but are _not_ retried (discarded immediately):
+- `NotInChannel` - Bot not in channel
+- `ChannelNotFound` - Channel doesn't exist
+- `IsArchived` - Channel is archived (NOTE: skips warning if `config.silence_archived_channel_exceptions = true`)
 
-- **Not In Channel**: Logs warning and re-raises (non-retryable)
-- **Channel Not Found**: Logs warning and re-raises (non-retryable)
-- **Channel Is Archived**: Logs warning and re-raises (or silently ignored if `config.silence_archived_channel_exceptions = true`)
-
-If sent async (via `call`):
-- **Rate Limits**: Automatically retries with delay from `Retry-After` header (up to 5 retries)
-- **Other Slack API Errors**: Logs warning and re-raises (will retry via background processor)
+Other Slack API errors will be re-raised (so will retry if sent via background processor).
 
 ---
 
@@ -377,7 +368,7 @@ SlackSender.call(
 
 ### Dedicated Notifiers
 
-For complex notifications, you can simplify your code by creating dedicated notifier classes using `SlackSender::Notifier`. This allows you to encapsulate logic, use callbacks, and keep your business logic clean.
+For complex notifications, you can simplify your code by creating dedicated notifier classes using `SlackSender::Notifier`. This allows you to encapsulate logic, use callbacks, and keep your business logic clean.  See documentation on [SlackSender::Notifier Base Class](axn_integration.md#slacksendernotifier-base-class) for details.
 
 ```ruby
 class DeployNotifier < SlackSender::Notifier
@@ -392,5 +383,3 @@ end
 # Usage
 DeployNotifier.call(service_name: "payment-service")
 ```
-
-See [SlackSender::Notifier Base Class](axn_integration.md#slacksendernotifier-base-class) for detailed documentation on building dedicated notifiers.

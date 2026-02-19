@@ -68,7 +68,7 @@ slack! channel: :ops_alerts, blocks: [{ type: "section", text: { type: "mrkdwn",
 
 ## SlackSender::Notifier Base Class
 
-For actions whose sole purpose is sending Slack notifications, inherit from `SlackSender::Notifier`:
+For actions whose sole purpose is sending Slack notifications, inherit from `SlackSender::Notifier`. These are built on top of Axn (that's where the `expects` DSL comes from below), so you'll want to [familiarize yourself with that library](https://teamshares.github.io/axn/) before continuing:
 
 ```ruby
 # app/slack_notifiers/deployments/finished.rb
@@ -166,21 +166,3 @@ Since `SlackSender::Notifier` inherits from Axn, you get:
 - Hooks (`before`, `after`, `on_success`, `on_failure`)
 - Automatic logging and error handling
 - Async execution with `call_async`
-
-```ruby
-class SlackNotifiers::DailyReport < SlackSender::Notifier
-  expects :date, type: Date, default: -> { Date.current }
-
-  notify do
-    channel :reports
-    text { "Daily Report for #{date.strftime('%B %d, %Y')}" }
-    attachments { [{ color: "good", text: "All systems operational" }] }
-  end
-end
-
-# Sync
-SlackNotifiers::DailyReport.call(date: Date.yesterday)
-
-# Async (via Sidekiq or ActiveJob)
-SlackNotifiers::DailyReport.call_async(date: Date.yesterday)
-```
