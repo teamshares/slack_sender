@@ -25,6 +25,22 @@ RSpec.describe SlackSender::Configuration do
     end
   end
 
+  describe "#use_slack_notifiers_namespace" do
+    it "defaults to true" do
+      expect(config.use_slack_notifiers_namespace).to be true
+    end
+
+    it "can be set to false" do
+      config.use_slack_notifiers_namespace = false
+      expect(config.use_slack_notifiers_namespace).to be false
+    end
+
+    it "can be set to true explicitly" do
+      config.use_slack_notifiers_namespace = true
+      expect(config.use_slack_notifiers_namespace).to be true
+    end
+  end
+
   describe "#sandbox_mode?" do
     context "when @sandbox_mode is explicitly set" do
       it "returns true when set to true" do
@@ -230,43 +246,6 @@ RSpec.describe SlackSender::Configuration do
 
         it { expect(config.async_backend_available?).to be_falsey }
       end
-    end
-  end
-
-  describe "#max_inline_file_size" do
-    it "defaults to 512 KB" do
-      expect(config.max_inline_file_size).to eq(524_288)
-    end
-
-    it "can be set to a custom value" do
-      config.max_inline_file_size = 1_000_000
-      expect(config.max_inline_file_size).to eq(1_000_000)
-    end
-
-    it "accepts zero" do
-      config.max_inline_file_size = 0
-      expect(config.max_inline_file_size).to eq(0)
-    end
-
-    it "raises ArgumentError for negative values" do
-      expect { config.max_inline_file_size = -1 }.to raise_error(
-        ArgumentError,
-        /max_inline_file_size must be a non-negative integer/,
-      )
-    end
-
-    it "raises ArgumentError for non-integer values" do
-      expect { config.max_inline_file_size = "100" }.to raise_error(
-        ArgumentError,
-        /max_inline_file_size must be a non-negative integer/,
-      )
-    end
-
-    it "raises ArgumentError for nil (unlike max_async_file_upload_size)" do
-      expect { config.max_inline_file_size = nil }.to raise_error(
-        ArgumentError,
-        /max_inline_file_size must be a non-negative integer/,
-      )
     end
   end
 

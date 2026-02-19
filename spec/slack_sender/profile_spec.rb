@@ -265,6 +265,24 @@ RSpec.describe SlackSender::Profile do
       end
     end
 
+    shared_examples "normalizes file: to files: (async)" do |method_name|
+      context "with file: parameter" do
+        it "normalizes file: to file_ids via FileUploader" do
+          profile.public_send(method_name, channel: "C123", file: StringIO.new("content"))
+
+          expect(delivery_kwargs[:file_ids]).to eq(file_ids)
+          expect(delivery_kwargs).not_to have_key(:file)
+          expect(delivery_kwargs).not_to have_key(:files)
+        end
+
+        it "raises ArgumentError when both file: and files: are provided" do
+          expect do
+            profile.public_send(method_name, channel: "C123", file: StringIO.new("one"), files: [StringIO.new("two")])
+          end.to raise_error(ArgumentError, /Cannot provide both file: and files:/)
+        end
+      end
+    end
+
     shared_examples "validates channels: kwarg" do |method_name|
       context "with channels: parameter" do
         it "raises ArgumentError when both channel: and channels: are provided" do
@@ -283,19 +301,22 @@ RSpec.describe SlackSender::Profile do
 
     describe "#call" do
       let(:delivery_kwargs) { nil }
+      let(:file_uploader) { instance_double(SlackSender::FileUploader) }
+      let(:file_ids) { [{ "id" => "F123", "title" => "test" }] }
 
       before do
         SlackSender::ProfileRegistry.all[profile.key] = profile
         allow(SlackSender.config).to receive(:async_backend_available?).and_return(true)
-        allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1_000_000)
         allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
         allow(SlackSender::DeliveryAxn).to receive(:call_async) { |**kwargs| @delivery_kwargs = kwargs }
+        allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
+        allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
       end
 
       let(:delivery_kwargs) { @delivery_kwargs }
 
       include_examples "validates unknown kwargs", :call
-      include_examples "normalizes file: to files:", :call
+      include_examples "normalizes file: to files: (async)", :call
       include_examples "validates channels: kwarg", :call
     end
 
@@ -598,94 +619,70 @@ RSpec.describe SlackSender::Profile do
             end
           end
 
-          context "larger than inline threshold" do
-            before do
-              # Set threshold low so file exceeds inline limit and triggers FileUploader path
-              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
-              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
-              allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
-              allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
+          before do
+            allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+            allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
+            allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
+          end
+
+          it "uploads files to Slack synchronously via FileUploader" do
+            expect(SlackSender::FileUploader).to receive(:new).and_call_original
+            allow_any_instance_of(SlackSender::FileUploader).to receive(:upload_to_slack).and_return(file_ids)
+            allow(SlackSender::DeliveryAxn).to receive(:call_async)
+
+            profile.call(channel: "C123", **file_kwargs)
+          end
+
+          it "passes file_ids instead of files to call_async" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+              profile: "test_profile",
+              channel: "C123",
+              file_ids:,
+            )
+
+            profile.call(channel: "C123", **file_kwargs)
+          end
+
+          it "does not include files in call_async kwargs" do
+            expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+              expect(kwargs).not_to have_key(:files)
+              expect(kwargs).not_to have_key(:file)
+              expect(kwargs).to have_key(:file_ids)
             end
 
-            it "uploads files to Slack synchronously via FileUploader" do
-              expect(SlackSender::FileUploader).to receive(:new).and_call_original
-              allow_any_instance_of(SlackSender::FileUploader).to receive(:upload_to_slack).and_return(file_ids)
-              allow(SlackSender::DeliveryAxn).to receive(:call_async)
+            profile.call(channel: "C123", **file_kwargs)
+          end
 
-              profile.call(channel: "C123", **file_kwargs)
-            end
-
-            it "passes file_ids instead of files to call_async" do
+          context "with text" do
+            it "includes both text and file_ids" do
               expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
                 profile: "test_profile",
                 channel: "C123",
+                text: "Check out this file",
                 file_ids:,
               )
 
-              profile.call(channel: "C123", **file_kwargs)
-            end
-
-            it "does not include files in call_async kwargs" do
-              expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
-                expect(kwargs).not_to have_key(:files)
-                expect(kwargs).not_to have_key(:file)
-                expect(kwargs).to have_key(:file_ids)
-              end
-
-              profile.call(channel: "C123", **file_kwargs)
-            end
-
-            context "with text" do
-              it "includes both text and file_ids" do
-                expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
-                  profile: "test_profile",
-                  channel: "C123",
-                  text: "Check out this file",
-                  file_ids:,
-                )
-
-                profile.call(channel: "C123", text: "Check out this file", **file_kwargs)
-              end
-            end
-
-            context "when FileUploader raises an error" do
-              before do
-                allow(file_uploader).to receive(:upload_to_slack).and_raise(
-                  Slack::Web::Api::Errors::SlackError.new("ratelimited"),
-                )
-              end
-
-              it "propagates the error to the caller" do
-                expect { profile.call(channel: "C123", **file_kwargs) }.to raise_error(
-                  Slack::Web::Api::Errors::SlackError,
-                )
-              end
-
-              it "does not enqueue the job" do
-                expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
-
-                expect { profile.call(channel: "C123", **file_kwargs) }.to raise_error(Slack::Web::Api::Errors::SlackError)
-              end
+              profile.call(channel: "C123", text: "Check out this file", **file_kwargs)
             end
           end
 
-          context "smaller than inline threshold" do
+          context "when FileUploader raises an error" do
             before do
-              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1_000_000)
-              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
+              allow(file_uploader).to receive(:upload_to_slack).and_raise(
+                Slack::Web::Api::Errors::SlackError.new("ratelimited"),
+              )
             end
 
-            it "passes files directly to call_async (no FileUploader)" do
-              expect(SlackSender::FileUploader).not_to receive(:new)
+            it "propagates the error to the caller" do
+              expect { profile.call(channel: "C123", **file_kwargs) }.to raise_error(
+                Slack::Web::Api::Errors::SlackError,
+              )
+            end
 
-              expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
-                expect(kwargs[:files]).to be_an(Array)
-                expect(kwargs[:files].first).to be_a(SlackSender::FileWrapper)
-                expect(kwargs).not_to have_key(:file_ids)
-                expect(kwargs).not_to have_key(:file)
-              end
+            it "does not enqueue the job" do
+              expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
 
-              profile.call(channel: "C123", **file_kwargs)
+              expect { profile.call(channel: "C123", **file_kwargs) }.to raise_error(Slack::Web::Api::Errors::SlackError)
             end
           end
         end
@@ -704,7 +701,6 @@ RSpec.describe SlackSender::Profile do
             let(:large_file) { StringIO.new(large_content) }
 
             before do
-              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
               allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
               # Stub the bytesize to simulate a file > 1 GB
               allow_any_instance_of(String).to receive(:bytesize).and_return(2_000_000_000)
@@ -733,7 +729,6 @@ RSpec.describe SlackSender::Profile do
             let(:medium_file) { StringIO.new("x" * 1000) }
 
             before do
-              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
               allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(500)
             end
 
@@ -759,7 +754,6 @@ RSpec.describe SlackSender::Profile do
 
             before do
               allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(nil)
-              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(100)
               allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
               allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
               allow(SlackSender::DeliveryAxn).to receive(:call_async)
@@ -767,29 +761,6 @@ RSpec.describe SlackSender::Profile do
 
             it "does not raise for large files (only Slack's 1 GB limit applies)" do
               expect { profile.call(channel: "C123", files: [medium_file]) }.not_to raise_error
-            end
-          end
-        end
-
-        context "inline vs upload threshold" do
-          context "when files exceed max_inline_file_size but within async limit" do
-            let(:medium_file) { StringIO.new("x" * 1000) }
-
-            before do
-              allow(SlackSender.config).to receive(:max_inline_file_size).and_return(100)
-              allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
-            end
-
-            it "uploads to Slack and passes file_ids to call_async" do
-              expect(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
-              expect(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
-
-              expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
-                expect(kwargs[:file_ids]).to eq(file_ids)
-                expect(kwargs).not_to have_key(:files)
-              end
-
-              profile.call(channel: "C123", files: [medium_file])
             end
           end
         end
@@ -950,7 +921,6 @@ RSpec.describe SlackSender::Profile do
           let(:file_ids) { [{ "id" => "F123", "title" => "attachment 1" }] }
 
           before do
-            allow(SlackSender.config).to receive(:max_inline_file_size).and_return(1)
             allow(SlackSender.config).to receive(:max_async_file_upload_size).and_return(25_000_000)
             allow(SlackSender::FileUploader).to receive(:new).and_return(file_uploader)
             allow(file_uploader).to receive(:upload_to_slack).and_return(file_ids)
@@ -1274,7 +1244,7 @@ RSpec.describe SlackSender::Profile do
     end
   end
 
-  describe "#format_group_mention" do
+  describe "#group_link" do
     before do
       allow(SlackSender.config).to receive(:sandbox_mode?).and_return(sandbox_mode?)
     end
@@ -1286,7 +1256,7 @@ RSpec.describe SlackSender::Profile do
         let(:profile) { build(:profile, user_groups: { eng_team: "S123ABC" }) }
 
         it "returns formatted group link for user group symbol" do
-          result = profile.format_group_mention(:eng_team)
+          result = profile.group_link(:eng_team)
 
           expect(result).to eq("<!subteam^S123ABC>")
         end
@@ -1294,7 +1264,7 @@ RSpec.describe SlackSender::Profile do
 
       context "with string ID" do
         it "returns formatted group link for string ID" do
-          result = profile.format_group_mention("S123ABC")
+          result = profile.group_link("S123ABC")
 
           expect(result).to eq("<!subteam^S123ABC>")
         end
@@ -1304,7 +1274,7 @@ RSpec.describe SlackSender::Profile do
         let(:profile) { build(:profile, sandbox: { user_group: { replace_with: "S_DEV_GROUP" } }, user_groups: { eng_team: "S123ABC" }) }
 
         it "ignores sandbox user_group and returns requested group link" do
-          result = profile.format_group_mention(:eng_team)
+          result = profile.group_link(:eng_team)
 
           expect(result).to eq("<!subteam^S123ABC>")
         end
@@ -1312,7 +1282,7 @@ RSpec.describe SlackSender::Profile do
 
       context "with unknown symbol key" do
         it "raises error" do
-          expect { profile.format_group_mention(:unknown_group) }.to raise_error("Unknown user group: unknown_group")
+          expect { profile.group_link(:unknown_group) }.to raise_error("Unknown user group: unknown_group")
         end
       end
     end
@@ -1325,7 +1295,7 @@ RSpec.describe SlackSender::Profile do
 
         context "with symbol key" do
           it "returns sandbox user_group link instead of requested group" do
-            result = profile.format_group_mention(:eng_team)
+            result = profile.group_link(:eng_team)
 
             expect(result).to eq("<!subteam^S_DEV_GROUP>")
           end
@@ -1333,7 +1303,7 @@ RSpec.describe SlackSender::Profile do
 
         context "with string ID" do
           it "returns sandbox user_group link instead of requested ID" do
-            result = profile.format_group_mention("S123ABC")
+            result = profile.group_link("S123ABC")
 
             expect(result).to eq("<!subteam^S_DEV_GROUP>")
           end
@@ -1344,7 +1314,7 @@ RSpec.describe SlackSender::Profile do
         let(:profile) { build(:profile, sandbox: {}, user_groups: { eng_team: "S123ABC" }) }
 
         it "returns the requested group link" do
-          result = profile.format_group_mention(:eng_team)
+          result = profile.group_link(:eng_team)
 
           expect(result).to eq("<!subteam^S123ABC>")
         end

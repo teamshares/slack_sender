@@ -249,7 +249,28 @@ RSpec.describe SlackSender do
     end
   end
 
-  describe ".format_group_mention" do
+  describe ".client" do
+    context "when default profile is set" do
+      let!(:profile) do
+        described_class.register(
+          token: "TEST_TOKEN",
+          sandbox: { channel: { replace_with: "C123" } },
+        )
+      end
+
+      it "delegates to default_profile.client" do
+        expect(described_class.client).to eq(profile.client)
+      end
+    end
+
+    context "when default profile is not set" do
+      it "raises an error" do
+        expect { described_class.client }.to raise_error(SlackSender::Error, /No default profile set/)
+      end
+    end
+  end
+
+  describe ".group_link" do
     let!(:profile) do
       described_class.register(
         token: "TEST_TOKEN",
@@ -263,8 +284,8 @@ RSpec.describe SlackSender do
         allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
       end
 
-      it "delegates to default_profile.format_group_mention" do
-        expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S123ABC>")
+      it "delegates to default_profile.group_link" do
+        expect(described_class.group_link(:eng_team)).to eq("<!subteam^S123ABC>")
       end
     end
 
@@ -286,7 +307,7 @@ RSpec.describe SlackSender do
         end
 
         it "uses sandbox user_group instead of requested group" do
-          expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S_DEV_GROUP>")
+          expect(described_class.group_link(:eng_team)).to eq("<!subteam^S_DEV_GROUP>")
         end
       end
 
@@ -300,7 +321,7 @@ RSpec.describe SlackSender do
         end
 
         it "uses requested group" do
-          expect(described_class.format_group_mention(:eng_team)).to eq("<!subteam^S123ABC>")
+          expect(described_class.group_link(:eng_team)).to eq("<!subteam^S123ABC>")
         end
       end
     end
@@ -313,7 +334,7 @@ RSpec.describe SlackSender do
 
       it "raises an error" do
         expect do
-          described_class.format_group_mention(:eng_team)
+          described_class.group_link(:eng_team)
         end.to raise_error(SlackSender::Error, /No default profile set/)
       end
     end

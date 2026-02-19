@@ -22,10 +22,10 @@ module SlackSender
       def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank? && file_ids.blank?
 
       def explicit_blank_text_only?
-        # If the caller explicitly passed `text:` but it is blank, treat it as a no-op
-        # *only* when no other content keys were provided. This avoids enqueuing retries
-        # for an input that can never succeed, while still failing true "no content" calls.
-        Util.blank_text_only?(@__context&.provided_data || {})
+        # Caller explicitly passed `text:` but it's blank, and no other content.
+        # Optional text is nil when omitted; preprocess returns "" when text: "" is passed.
+        # Treat as no-op so we don't error or retry on intent-only blank sends.
+        content_blank? && text.is_a?(String)
       end
 
       # TODO: Add better validations against slack block kit API
