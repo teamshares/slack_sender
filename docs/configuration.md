@@ -44,7 +44,6 @@ end
 | `sandbox_default_behavior` | `Symbol` | `:noop` | Default behavior when in sandbox mode if profile doesn't specify. Options: `:noop`, `:redirect`, `:passthrough` |
 | `enabled` | `Boolean` | `true` | Global enable/disable flag. When `false`, `call` and `call!` return `false` without sending |
 | `silence_archived_channel_exceptions` | `Boolean` | `false` | If `true`, silently ignores `IsArchived` errors instead of reporting them |
-| `max_inline_file_size` | `Integer` | `524_288` (512 KB) | Max total file size to serialize directly to job payload |
 | `max_async_file_upload_size` | `Integer` or `nil` | `26_214_400` (25 MB) | Max total file size for async uploads. Set to `nil` to disable |
 | `use_slack_notifiers_namespace` | `Boolean` | `true` | When `true`, files in `app/slack_notifiers` are autoloaded under the `SlackNotifiers` namespace |
 

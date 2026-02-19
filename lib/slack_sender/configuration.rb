@@ -8,8 +8,7 @@ module SlackSender
     # Slack's hard limit per file (1 GB)
     SLACK_MAX_FILE_SIZE = 1_073_741_824
 
-    # Default file size thresholds
-    DEFAULT_MAX_INLINE_FILE_SIZE = 524_288 # 512 KB - conservative for Redis/Sidekiq payloads
+    # Default file size threshold for async uploads
     DEFAULT_MAX_ASYNC_FILE_UPLOAD_SIZE = 26_214_400 # 25 MB
 
     attr_writer :sandbox_mode
@@ -24,7 +23,6 @@ module SlackSender
       # Default values
       @enabled = true
       @sandbox_default_behavior = :noop
-      @max_inline_file_size = DEFAULT_MAX_INLINE_FILE_SIZE
       @max_async_file_upload_size = DEFAULT_MAX_ASYNC_FILE_UPLOAD_SIZE
       @use_slack_notifiers_namespace = true
     end
@@ -80,16 +78,6 @@ module SlackSender
       end
     end
 
-    # Maximum file size to serialize directly to job payload (avoids sync Slack upload).
-    # Files smaller than this are inlined; larger files are uploaded to Slack first.
-    # Default: 512 KB (conservative for Redis memory)
-    attr_reader :max_inline_file_size
-
-    def max_inline_file_size=(value)
-      validate_max_inline_file_size!(value)
-      @max_inline_file_size = value
-    end
-
     # Maximum total file size allowed for async uploads.
     # Set to nil to disable (only Slack's 1 GB per-file limit applies).
     # Files exceeding this raise an error immediately to avoid blocking web processes.
@@ -102,12 +90,6 @@ module SlackSender
     end
 
     private
-
-    def validate_max_inline_file_size!(value)
-      return if value.is_a?(Integer) && value >= 0
-
-      raise ArgumentError, "max_inline_file_size must be a non-negative integer, got: #{value.inspect}"
-    end
 
     def validate_max_async_file_upload_size!(value)
       return if value.nil? # nil means disabled

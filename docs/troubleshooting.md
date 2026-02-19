@@ -68,16 +68,12 @@ For DMs, find the DM channel ID (starts with `D`) from Slack's URL when viewing 
 
 ### File Uploads Fail with Async Delivery
 
-File uploads with async delivery (`call`) are supported, but have size limits:
-
-- Files smaller than `max_inline_file_size` (default 512 KB) are serialized directly to the job
-- Larger files are uploaded to Slack synchronously, then shared via background job
-- Total file size cannot exceed `max_async_file_upload_size` (default 25 MB)
+File uploads with async delivery (`call`) are supported. Files are uploaded to Slack synchronously, then shared via the background job. Total file size cannot exceed `max_async_file_upload_size` (default 25 MB).
 
 **If you're hitting the async size limit:**
 
 ```ruby
-# Trying increasing the async limit
+# Try increasing the async limit
 SlackSender.config.max_async_file_upload_size = 100_000_000  # 100 MB
 ```
 

@@ -178,22 +178,15 @@ module SlackSender
     end
 
     # Handles file preprocessing for async delivery.
-    # - Validates files against size limits
-    # - Small files (< max_inline_file_size): serialized directly to job payload
-    # - Larger files: uploaded to Slack synchronously, file_ids passed to job for sharing
+    # Files are uploaded to Slack synchronously before enqueueing the job;
+    # the job then shares the uploaded files via file_ids.
     def preprocess_files_for_async!(kwargs)
       return unless kwargs[:files].present?
 
       wrapped = MultiFileWrapper.new(kwargs.delete(:files))
       wrapped.validate_for_async!
 
-      if wrapped.total_file_size <= SlackSender.config.max_inline_file_size
-        # Small files: serialize directly to job payload (skip sync Slack upload)
-        kwargs[:files] = wrapped.files
-      else
-        # Larger files: upload to Slack synchronously, pass file_ids to job
-        kwargs[:file_ids] = FileUploader.new(client, wrapped.files).upload_to_slack
-      end
+      kwargs[:file_ids] = FileUploader.new(client, wrapped.files).upload_to_slack
     end
 
     def preprocess_call_kwargs(raw)

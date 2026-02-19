@@ -171,10 +171,7 @@ To send files as a DM, use the DM channel ID (starts with `D`) from Slack's URL.
 
 ### Async File Upload Behavior
 
-- **Small files** (< `max_inline_file_size`, default 512 KB): Serialized directly to the job payload
-- **Larger files**: Uploaded to Slack's servers synchronously, then the background job shares them
-
-This means `call` with larger files may block briefly during the upload phase.
+Files are uploaded to Slack's servers synchronously before the background job is enqueued. The job then shares the uploaded files to the channel. This means `call` with files may block briefly during the upload phase.
 
 ### Size Limits
 
