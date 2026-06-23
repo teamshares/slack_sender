@@ -106,14 +106,14 @@ RSpec.describe SlackSender::Configuration do
     it "raises ArgumentError for unsupported behavior" do
       expect { config.sandbox_default_behavior = :unknown }.to raise_error(
         ArgumentError,
-        /Unsupported sandbox behavior: :unknown/,
+        /sandbox_default_behavior must be one of.*got :unknown/,
       )
     end
 
     it "includes supported behaviors in error message" do
       expect { config.sandbox_default_behavior = :invalid }.to raise_error(
         ArgumentError,
-        /Supported behaviors: \[:noop, :redirect, :passthrough\]/,
+        /must be one of :noop, :redirect, :passthrough/,
       )
     end
   end

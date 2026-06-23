@@ -2,6 +2,10 @@
 
 module SlackSender
   class Configuration
+    # Validated instance settings via the upstream Axn::Configurable DSL (class flavor).
+    # Only the simple settings are declared here; everything bespoke below stays hand-written.
+    extend Axn::Configurable::Settings
+
     SUPPORTED_ASYNC_BACKENDS = %i[sidekiq active_job].freeze
     SUPPORTED_SANDBOX_BEHAVIORS = %i[noop redirect passthrough].freeze
 
@@ -11,20 +15,20 @@ module SlackSender
     # Default file size threshold for async uploads
     DEFAULT_MAX_ASYNC_FILE_UPLOAD_SIZE = 26_214_400 # 25 MB
 
-    attr_writer :sandbox_mode
-    attr_accessor :enabled, :silence_archived_channel_exceptions
+    setting :enabled, default: true
+    setting :silence_archived_channel_exceptions
+    setting :sandbox_default_behavior, default: :noop, one_of: SUPPORTED_SANDBOX_BEHAVIORS
 
     # Whether to autoload files in app/slack_notifiers under the SlackNotifiers namespace.
     # When true (default): app/slack_notifiers/foo.rb defines SlackNotifiers::Foo
     # When false: app/slack_notifiers/foo.rb defines Foo (standard Rails behavior)
-    attr_accessor :use_slack_notifiers_namespace
+    setting :use_slack_notifiers_namespace, default: true
+
+    attr_writer :sandbox_mode
 
     def initialize
-      # Default values
-      @enabled = true
-      @sandbox_default_behavior = :noop
+      # Bespoke settings (not backed by the DSL) need their defaults set here.
       @max_async_file_upload_size = DEFAULT_MAX_ASYNC_FILE_UPLOAD_SIZE
-      @use_slack_notifiers_namespace = true
     end
 
     def sandbox_mode?
@@ -35,18 +39,6 @@ module SlackSender
       else
         true
       end
-    end
-
-    attr_reader :sandbox_default_behavior
-
-    def sandbox_default_behavior=(value)
-      unless SUPPORTED_SANDBOX_BEHAVIORS.include?(value)
-        raise ArgumentError,
-              "Unsupported sandbox behavior: #{value.inspect}. " \
-              "Supported behaviors: #{SUPPORTED_SANDBOX_BEHAVIORS.inspect}"
-      end
-
-      @sandbox_default_behavior = value
     end
 
     def async_backend
