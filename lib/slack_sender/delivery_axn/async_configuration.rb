@@ -19,9 +19,11 @@ module SlackSender
         # Backend is already validated by Configuration#async_backend=
         case backend
         when :sidekiq
-          async :sidekiq, retry: 5, dead: false
-          # Configure Sidekiq-specific retry logic (including skipping retries for InvalidArgumentsError)
-          if defined?(Sidekiq::Job) && respond_to?(:sidekiq_retry_in)
+          # Configure Sidekiq-specific retry logic (including skipping retries for InvalidArgumentsError).
+          # On axn's current Sidekiq adapter the action is not itself a Sidekiq::Job; sidekiq_retry_in is a
+          # worker-subclass hook, so it must be declared inside the `async :sidekiq do…end` block (the block
+          # is class_eval'd onto the generated AxnSidekiqWorker).
+          async :sidekiq, retry: 5, dead: false do
             sidekiq_retry_in do |_count, exception|
               # Don't retry invalid arguments
               next :discard if exception.is_a?(SlackSender::InvalidArgumentsError)

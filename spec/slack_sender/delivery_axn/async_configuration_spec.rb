@@ -87,6 +87,42 @@ RSpec.describe SlackSender::DeliveryAxn::AsyncConfiguration do
     end
   end
 
+  describe "sidekiq worker configuration (real adapter wiring)" do
+    # Unlike the simulation tests above, these assert against the worker that axn's Sidekiq
+    # adapter actually builds. On axn's current adapter the action is NOT a Sidekiq::Job; the
+    # `async :sidekiq do…end` block is class_eval'd onto a generated per-action AxnSidekiqWorker
+    # subclass, and sidekiq_retry_in is a worker-level hook. If the retry block were declared on
+    # the action class instead of inside the block (the prior regression), the hook would be
+    # silently dropped and retry_in_block would be nil here.
+    subject(:worker) { SlackSender::DeliveryAxn.const_get(:AxnSidekiqWorker, false) }
+
+    it "builds an AxnSidekiqWorker subclass that is a Sidekiq::Job" do
+      expect(worker).to be < Sidekiq::Job
+    end
+
+    it "applies the retry/dead kwargs via sidekiq_options" do
+      expect(worker.sidekiq_options).to include("retry" => 5, "dead" => false)
+    end
+
+    describe "sidekiq_retry_in hook" do
+      subject(:retry_in_block) { worker.sidekiq_retry_in_block }
+
+      it "is attached to the worker (not silently dropped)" do
+        expect(retry_in_block).not_to be_nil
+      end
+
+      it "returns :discard for InvalidArgumentsError (skip retries)" do
+        error = SlackSender::InvalidArgumentsError.new("No content provided")
+        expect(retry_in_block.call(0, error)).to eq(:discard)
+      end
+
+      it "does not discard transient StandardErrors (allow retries)" do
+        error = StandardError.new("Network timeout")
+        expect(retry_in_block.call(0, error)).not_to eq(:discard)
+      end
+    end
+  end
+
   describe "active_job retry behavior" do
     # For ActiveJob, discard_on is declarative. We test that the error class hierarchy
     # ensures InvalidArgumentsError would be caught by discard_on while other errors
