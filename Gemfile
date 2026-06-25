@@ -5,9 +5,9 @@ source "https://rubygems.org"
 # Specify your gem's dependencies in slacker-rb.gemspec
 gemspec
 
-# PRO-2775: temporarily pin axn to the branch providing Axn::Configurable until it ships.
-# Flip back to the released gem once that branch is merged and published.
-gem "axn", github: "teamshares/axn", branch: "kali/pro-2769-axn-configuration-dsl-for-downstream-gem-consistency"
+# PRO-2775: temporarily pin axn to main now that the Axn::Configurable DSL (PRO-2769) is merged.
+# Flip back to the released gem once that change ships in a published version.
+gem "axn", github: "teamshares/axn", branch: "main"
 
 # Development dependencies
 gem "factory_bot", "~> 6.0"

@@ -372,8 +372,10 @@ RSpec.describe SlackSender::Strategy do
           end
 
           it "validates default channel against the overridden profile" do
-            # :channel_a is not valid in :profile_b, so this should fail
-            expect { action_class.call! }.to raise_error(Axn::Failure, /Unknown channel/)
+            # :channel_a is not valid in :profile_b, so this should fail. The channel is validated
+            # inside the :channel preprocess lambda, so call! re-raises axn's PreprocessingError
+            # (wrapping the InvalidArgumentsError) rather than a bare Axn::Failure.
+            expect { action_class.call! }.to raise_error(Axn::ContractViolation::PreprocessingError, /Unknown channel/)
           end
         end
 
