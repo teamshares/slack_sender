@@ -16,6 +16,7 @@ gem "sidekiq"
 
 # Misc/default
 gem "irb"
-gem "rdoc", "~> 7.2"  # Match Ruby default gem to avoid "already initialized constant" warnings
 gem "rake", "~> 13.0"
+# Match Ruby default gem to avoid "already initialized constant" warnings
+gem "rdoc", "~> 7.2"
 gem "rubocop", "~> 1.21"
