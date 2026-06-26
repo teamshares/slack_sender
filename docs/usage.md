@@ -250,6 +250,15 @@ SlackSender.group_link(:on_call)
 # => "<!subteam^S1234567890>"
 ```
 
+`group_link` is defined **per profile** — `SlackSender.group_link(...)` is just a convenience that delegates to the default profile. Each profile resolves symbol keys against *its own* `user_groups` registry, so you can format a mention for any registered profile:
+
+```ruby
+SlackSender[:health_insurance].group_link(:benefits_team)
+# => resolves :benefits_team from the :health_insurance profile's user_groups
+```
+
+Passing a string is treated as a raw group ID (no registry lookup), on any profile.
+
 If `sandbox.user_group.replace_with` is configured and the app is in sandbox mode, `group_link` will replace the requested group with the sandbox user_group instead:
 
 ```ruby
