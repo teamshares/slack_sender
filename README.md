@@ -79,6 +79,7 @@ That's it. SlackSender handles rate limits, retries, and sandbox redirection (if
 - **Sandbox mode** — redirect or suppress messages in non-production environments
 - **File uploads** — sync and async, with automatic size handling
 - **Multiple profiles** — manage multiple Slack workspaces
+- **Full option passthrough** — forward any [`chat.postMessage`](https://www.rubydoc.info/gems/slack-ruby-client/Slack/Web/Api/Endpoints/Chat#chat_postMessage-instance_method) option via [`slack_options:`](docs/usage.md#other-chatpostmessage-options)
 - **Axn integration** — `use :slack` strategy and dedicated `Notifier` base class
 
 ## Development
