@@ -17,10 +17,22 @@ module SlackSender
     include ErrorMessageParsing
     include Validation
 
+    # Base/headline message. axn prefixes every failure *reason* with this as
+    # "Unable to send Slack message: <reason>", and uses it standalone as result.error for any
+    # unexpected error that has no specific reason handler (instead of axn's generic "Something
+    # went wrong"). It only affects the error-message *presentation* — classification, retries,
+    # and on_exception reporting are unchanged.
+    error "Unable to send Slack message"
+
     # Expose InvalidArgumentsError message directly (these errors skip retries)
     # Handle both direct raises and raises from preprocess lambdas (wrapped in PreprocessingError)
     error(if: InvalidArgumentsError, &:message)
     error(if: ->(exception:) { exception.is_a?(Axn::ContractViolation::PreprocessingError) && exception.cause.is_a?(InvalidArgumentsError) }) { |e| e.cause.message }
+
+    # Surface SlackSender::Error messages (e.g. the re-raised missing-scope error) on result.error
+    # so they get the base prefix too. Message presentation only — these stay exception-bucket
+    # (still reported + retried like any other StandardError), exactly as before.
+    error(if: SlackSender::Error, &:message)
 
     expects :profile, type: Profile, preprocess: lambda { |p|
       # If given a string/symbol (profile name), look it up in the registry
