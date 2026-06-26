@@ -888,6 +888,35 @@ RSpec.describe SlackSender::DeliveryAxn do
     end
   end
 
+  describe "slack_options passthrough" do
+    before { allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false) }
+
+    it "forwards arbitrary chat_postMessage options" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(channel: "C123456", text: "Hello, World!", unfurl_links: false, reply_broadcast: true),
+      ).and_return("ts" => "1.0")
+
+      result = action_class.call(profile:, channel: "C123456", text:, slack_options: { unfurl_links: false, reply_broadcast: true })
+      expect(result).to be_ok
+    end
+
+    it "symbolizes string option keys" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(unfurl_media: true),
+      ).and_return("ts" => "1.0")
+
+      action_class.call(profile:, channel: "C123456", text:, slack_options: { "unfurl_media" => true })
+    end
+
+    it "does not let slack_options override managed keys (channel/text)" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(channel: "C123456", text: "Hello, World!"),
+      ).and_return("ts" => "1.0")
+
+      action_class.call(profile:, channel: "C123456", text:, slack_options: { channel: "C_EVIL", text: "overridden" })
+    end
+  end
+
   describe "InvalidArgumentsError" do
     describe "raises InvalidArgumentsError for validation failures" do
       shared_examples "raises InvalidArgumentsError" do |error_message|

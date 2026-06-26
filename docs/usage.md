@@ -117,6 +117,20 @@ SlackSender.call(
 )
 ```
 
+### Other `chat.postMessage` Options
+
+First-class options (`text`, `blocks`, `attachments`, `icon_emoji`, `thread_ts`) cover the common cases. For anything else the [`chat.postMessage` endpoint](https://www.rubydoc.info/gems/slack-ruby-client/Slack/Web/Api/Endpoints/Chat#chat_postMessage-instance_method) supports — `unfurl_links`, `unfurl_media`, `reply_broadcast`, `metadata`, etc. — pass a `slack_options:` hash. It is forwarded straight through to Slack:
+
+```ruby
+SlackSender.call(
+  channel: :ops_alerts,
+  text: "https://example.com/runbook",
+  slack_options: { unfurl_links: false, unfurl_media: false }
+)
+```
+
+The managed keys above always take precedence over `slack_options`, so sandbox channel redirection and text formatting can't be accidentally overridden. `slack_options:` applies to text messages only — it is not forwarded on the file-upload path (a different Slack endpoint).
+
 ---
 
 ## File Uploads

@@ -66,6 +66,13 @@ module SlackSender
     # Array of hashes with "id" and "title" keys.
     expects :file_ids, type: Array, optional: true
 
+    # Escape hatch: arbitrary chat.postMessage options forwarded straight to Slack
+    # (e.g. unfurl_links:, unfurl_media:, reply_broadcast:, metadata:). Managed keys
+    # (channel/text/blocks/attachments/icon_emoji/thread_ts) take precedence so sandbox
+    # redirection and text formatting can't be clobbered. Applies to the text-post path only,
+    # not file uploads (a different endpoint with a different option set).
+    expects :slack_options, type: Hash, optional: true
+
     exposes :thread_ts, type: String, optional: true
 
     def call
@@ -221,6 +228,9 @@ module SlackSender
         icon_emoji:,
         thread_ts:,
       }.compact_blank
+
+      # Merge caller passthrough options, but let our managed keys win.
+      params = slack_options.symbolize_keys.merge(params) if slack_options.present?
 
       response = client.chat_postMessage(**params)
       expose thread_ts: response["ts"]

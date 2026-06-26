@@ -18,6 +18,10 @@
   generic `"Something went wrong"`. This is presentation-only — error classification, retries, and
   exception reporting are unchanged. The `MISSING_SCOPE`/`MISSING_SCOPE_UNKNOWN` messages dropped
   their `"Slack API missing_scope error:"` lead-in so they read cleanly under the new prefix.
+- Add a `slack_options:` passthrough hash for forwarding arbitrary `chat.postMessage` options
+  (`unfurl_links`, `unfurl_media`, `reply_broadcast`, `metadata`, …) straight to Slack. Managed
+  keys (channel/text/blocks/attachments/icon_emoji/thread_ts) take precedence; applies to the
+  text-post path only, not file uploads.
 
 ## [0.1.0] - 2026-02-19
 

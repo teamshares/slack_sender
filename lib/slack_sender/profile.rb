@@ -16,6 +16,7 @@ module SlackSender
       thread_ts
       file
       files
+      slack_options
       profile
     ].freeze
 

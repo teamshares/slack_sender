@@ -237,6 +237,10 @@ RSpec.describe SlackSender::Profile do
           expect { profile.public_send(method_name, channel: "C123", text: "hi", thread_ts: "123.456") }.not_to raise_error
         end
 
+        it "does not raise for slack_options" do
+          expect { profile.public_send(method_name, channel: "C123", text: "hi", slack_options: { unfurl_links: false }) }.not_to raise_error
+        end
+
         it "does not raise for files" do
           expect { profile.public_send(method_name, channel: "C123", files: [StringIO.new("content")]) }.not_to raise_error
         end
