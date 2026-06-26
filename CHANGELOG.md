@@ -2,7 +2,7 @@
 
 * N/A
 
-## [0.2.0] - 2026-06-26
+## [0.1.1] - 2026-06-26
 
 - Adopt the upstream `Axn::Configurable::Settings` DSL for the simple, declarative
   `SlackSender::Configuration` settings (`enabled`, `silence_archived_channel_exceptions`,
