@@ -151,6 +151,17 @@ RSpec.describe SlackSender::FileUploader do
       context "when no scope information is available" do
         include_examples "missing scope error with unknown scope"
       end
+
+      # FileUploader runs outside DeliveryAxn (the async pre-upload path), so it has no base
+      # message to attach to. Locks that MISSING_SCOPE reads as a complete, standalone sentence
+      # here too (the same constant is prefixed by DeliveryAxn's base on the text-post path).
+      it "raises a standalone, self-contained message (no base message to attach to)" do
+        expect { uploader.upload_to_slack }.to raise_error(
+          SlackSender::Error,
+          "Missing required Slack scope 'files:write'. Add this scope to your Slack app at " \
+          "https://api.slack.com/apps and reinstall the app.",
+        )
+      end
     end
   end
 end

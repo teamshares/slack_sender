@@ -18,8 +18,10 @@
   Every failure reason is prefixed as `"Unable to send Slack message: <reason>"`, and unexpected
   errors with no specific reason handler surface `"Unable to send Slack message"` instead of axn's
   generic `"Something went wrong"`. This is presentation-only — error classification, retries, and
-  exception reporting are unchanged. The `MISSING_SCOPE`/`MISSING_SCOPE_UNKNOWN` messages dropped
-  their `"Slack API missing_scope error:"` lead-in so they read cleanly under the new prefix.
+  exception reporting are unchanged. The `MISSING_SCOPE`/`MISSING_SCOPE_UNKNOWN` messages were
+  rewritten as complete, self-contained sentences (`"Missing required Slack scope '%s'. ..."`) so
+  they read cleanly both prefixed by the base (`DeliveryAxn`'s text-post path) and standalone
+  (`FileUploader`'s async pre-upload path, which has no base to attach to).
 - Add a `slack_options:` passthrough hash for forwarding arbitrary `chat.postMessage` options
   (`unfurl_links`, `unfurl_media`, `reply_broadcast`, `metadata`, …) straight to Slack. Managed
   keys (channel/text/blocks/attachments/icon_emoji/thread_ts) take precedence; applies to the

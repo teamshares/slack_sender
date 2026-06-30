@@ -865,10 +865,10 @@ RSpec.describe SlackSender::DeliveryAxn do
         )
       end
 
-      it "surfaces the scope detail prefixed with the base (no redundant 'Slack API ... error:' clause)" do
+      it "surfaces the scope detail prefixed with the base, reading as a complete sentence either way" do
         expect(result).not_to be_ok
         expect(result.error).to eq(
-          "Unable to send Slack message: required scope 'chat:write' is not granted. " \
+          "Unable to send Slack message: Missing required Slack scope 'chat:write'. " \
           "Add this scope to your Slack app at https://api.slack.com/apps and reinstall the app.",
         )
       end
