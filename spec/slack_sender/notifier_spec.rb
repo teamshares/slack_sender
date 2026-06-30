@@ -474,6 +474,41 @@ RSpec.describe SlackSender::Notifier do
       expect(result.exception).to be_a(ArgumentError)
       expect(result.exception.message).to match(/Missing payload/)
     end
+
+    # Regression: a DeliveryAxn failure bubbling up through a Notifier is a nested call!,
+    # so axn aggregates base headers (PRO-2820/#132). The Notifier declares no base, so the
+    # aggregated result.error is just DeliveryAxn's prefixed message — no double prefix, no
+    # "...: Something went wrong" noise. The foreign exception keeps its raw technical #message.
+    context "when the underlying Slack delivery fails" do
+      let(:notifier_class) do
+        Class.new(described_class) do
+          notify do
+            channel :notifications
+            text { "Hello" }
+          end
+        end
+      end
+
+      before do
+        slack_error = Slack::Web::Api::Errors::SlackError.new("unknown_error")
+        allow(slack_error).to receive(:response).and_return(nil)
+        allow(slack_error).to receive(:error).and_return("unknown_error")
+        allow(slack_error).to receive(:response_metadata).and_return(nil)
+        allow(client_dbl).to receive(:chat_postMessage).and_raise(slack_error)
+      end
+
+      it "surfaces DeliveryAxn's base-prefixed message on result.error (no double prefix)" do
+        result = notifier_class.call
+        expect(result).not_to be_ok
+        expect(result.error).to eq("Unable to send Slack message: unknown_error")
+      end
+
+      it "keeps the original technical message on the foreign exception" do
+        result = notifier_class.call
+        expect(result.exception).to be_a(Slack::Web::Api::Errors::SlackError)
+        expect(result.exception.message).to eq("unknown_error")
+      end
+    end
   end
 
   describe "resolution precedence" do
