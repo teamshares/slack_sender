@@ -34,13 +34,9 @@ module SlackSender
           end
         when :active_job
           async :active_job do
-            # Skip retries for invalid arguments - these will never succeed. discard_on matches by
-            # class, so also discard the PreprocessingError wrapper axn raises when an
-            # InvalidArgumentsError comes from a preprocess lambda (e.g. an unknown channel);
-            # preprocessing/contract violations are deterministic and never succeed on retry.
-            discard_on SlackSender::InvalidArgumentsError
-            discard_on Axn::ContractViolation::PreprocessingError
-
+            # ActiveJob reads rescue handlers bottom-to-top (last declared is matched first), so the
+            # catch-all retry_on StandardError MUST be declared before the specific discards below —
+            # otherwise it shadows them and permanent errors burn all attempts.
             retry_on StandardError, wait: :exponentially_longer, attempts: 5 do |_job, exception|
               retry_behavior = SlackSender::Util.parse_retry_delay_from_exception(exception)
               next if retry_behavior == :discard
@@ -49,6 +45,14 @@ module SlackSender
               retry_job wait: retry_behavior.seconds if retry_behavior.is_a?(Numeric) && retry_behavior.positive?
               # Otherwise, let ActiveJob use its default retry behavior
             end
+
+            # Skip retries for invalid arguments - these will never succeed. discard_on matches by
+            # class, so also discard the PreprocessingError wrapper axn raises when an
+            # InvalidArgumentsError comes from a preprocess lambda (e.g. an unknown channel);
+            # preprocessing/contract violations are deterministic and never succeed on retry.
+            # Declared after retry_on so these specific handlers take precedence.
+            discard_on SlackSender::InvalidArgumentsError
+            discard_on Axn::ContractViolation::PreprocessingError
           end
         end
       end
