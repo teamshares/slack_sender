@@ -10,7 +10,10 @@
   (`sandbox_mode?`, `async_backend`, `max_async_file_upload_size`) remain hand-written.
 - **Behavior change:** invalid `sandbox_default_behavior` values now raise the DSL's
   `ArgumentError` (`sandbox_default_behavior must be one of ...`) instead of the previous
-  hand-written `Unsupported sandbox behavior` message.
+  hand-written `Unsupported sandbox behavior` message. `Profile`'s per-profile
+  `sandbox: { behavior: ... }` validation now shares `Configuration::SUPPORTED_SANDBOX_BEHAVIORS`
+  and raises the matching wording (`sandbox.behavior must be one of ...`), so the two no longer
+  diverge.
 - Requires a release of upstream `axn` that includes `Axn::Configurable` (PRO-2769) and the error
   message presentation behavior from PRO-2820 (#132) and PRO-2832 (#134) — the base/reason prefix
   and nested-`call!` header aggregation that the base-message behavior below relies on.
@@ -28,7 +31,10 @@
   text-post path only, not file uploads. Like `blocks`/`attachments`, `slack_options` is
   deep-stringified before an async job is enqueued, so a symbol-keyed hash (e.g.
   `slack_options: { unfurl_links: false }`) doesn't get rejected by Sidekiq's strict argument
-  checks before the message is ever sent.
+  checks before the message is ever sent. A call with blank `text:` but a non-empty
+  `slack_options:` is no longer treated as a no-op (previously it was silently dropped, matching
+  the existing blank-text/blocks/attachments/files no-op check, which `slack_options` was missing
+  from).
 
 ## [0.1.0] - 2026-02-19
 

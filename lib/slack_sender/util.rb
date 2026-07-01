@@ -26,7 +26,8 @@ module SlackSender
         kwargs[:blocks].blank? &&
         kwargs[:attachments].blank? &&
         kwargs[:file].blank? &&
-        kwargs[:files].blank?
+        kwargs[:files].blank? &&
+        kwargs[:slack_options].blank?
     end
 
     # Determines retry behavior for Slack API exceptions

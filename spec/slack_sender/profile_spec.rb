@@ -182,10 +182,13 @@ RSpec.describe SlackSender::Profile do
     end
 
     context "when behavior is unsupported" do
-      it "raises ArgumentError" do
+      it "raises ArgumentError matching Configuration#sandbox_default_behavior's DSL wording" do
         expect do
           build(:profile, sandbox: { behavior: :invalid_behavior })
-        end.to raise_error(ArgumentError, /Unsupported sandbox behavior: :invalid_behavior/)
+        end.to raise_error(
+          ArgumentError,
+          "sandbox.behavior must be one of :noop, :redirect, :passthrough; got :invalid_behavior",
+        )
       end
     end
   end
@@ -356,6 +359,15 @@ RSpec.describe SlackSender::Profile do
         it "does not enqueue and returns false" do
           expect(SlackSender::DeliveryAxn).not_to receive(:call_async)
           expect(profile.call(channel: "C123", text: "")).to be false
+        end
+      end
+
+      context "when text is blank but slack_options is provided" do
+        it "still enqueues, not treating it as a no-op" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+            expect(kwargs[:slack_options]).to eq("unfurl_links" => false)
+          end
+          expect(profile.call(channel: "C123", text: "", slack_options: { unfurl_links: false })).to be true
         end
       end
 

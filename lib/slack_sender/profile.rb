@@ -2,8 +2,6 @@
 
 module SlackSender
   class Profile # rubocop:disable Metrics/ClassLength
-    SUPPORTED_SANDBOX_BEHAVIORS = %i[redirect noop passthrough].freeze
-
     # Valid kwargs accepted by Profile#call / Profile#call!
     # These are validated early (before backgrounding) to catch typos like `test:` instead of `text:`
     VALID_CALL_KWARGS = %i[
@@ -63,13 +61,16 @@ module SlackSender
         user_group: normalize_sandbox_user_group(config[:user_group]),
       }.compact
 
-      # Extract and validate behavior if present
+      # Extract and validate behavior if present. Shares Configuration::SUPPORTED_SANDBOX_BEHAVIORS
+      # (single source of truth) and mirrors its `one_of:` DSL wording, so a mistyped
+      # `sandbox: { behavior: ... }` and a mistyped `config.sandbox_default_behavior =` read the
+      # same way.
       if config[:behavior]
         behavior = config[:behavior].to_sym
-        unless SUPPORTED_SANDBOX_BEHAVIORS.include?(behavior)
+        supported = Configuration::SUPPORTED_SANDBOX_BEHAVIORS
+        unless supported.include?(behavior)
           raise ArgumentError,
-                "Unsupported sandbox behavior: #{behavior.inspect}. " \
-                "Supported behaviors: #{SUPPORTED_SANDBOX_BEHAVIORS.inspect}"
+                "sandbox.behavior must be one of #{supported.map(&:inspect).join(", ")}; got #{behavior.inspect}"
         end
         result[:behavior] = behavior
       end

@@ -63,6 +63,18 @@ RSpec.describe SlackSender::Util do
 
       it { is_expected.to be true }
     end
+
+    context "when text is blank but slack_options present" do
+      let(:kwargs) { { text: "", slack_options: { unfurl_links: false } } }
+
+      it { is_expected.to be false }
+    end
+
+    context "when text is blank and slack_options is empty" do
+      let(:kwargs) { { text: "", slack_options: {} } }
+
+      it { is_expected.to be true }
+    end
   end
 
   describe ".extract_needed_scope" do
