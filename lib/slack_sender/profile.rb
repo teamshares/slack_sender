@@ -18,6 +18,10 @@ module SlackSender
       profile
     ].freeze
 
+    # Keys whose (possibly nested) symbol keys must be stringified before an async enqueue, so
+    # Sidekiq's strict argument checking doesn't reject them. Add new passthrough-style keys here.
+    ASYNC_SERIALIZABLE_KEYS = %i[blocks attachments slack_options].freeze
+
     attr_reader :default_channel, :channels, :user_groups, :slack_client_config, :key, :sandbox
 
     def initialize(key:, token:, default_channel: nil, channels: {}, user_groups: {}, slack_client_config: {}, sandbox: {})
@@ -197,7 +201,7 @@ module SlackSender
         normalize_file_to_files!(kwargs)
         normalize_and_apply_channels!(kwargs)
         validate_and_handle_profile_parameter!(kwargs)
-        preprocess_blocks_and_attachments!(kwargs)
+        normalize_async_serializable_keys!(kwargs)
       end
     end
 
@@ -285,13 +289,8 @@ module SlackSender
       kwargs[:validate_known_channel] = true
     end
 
-    def preprocess_blocks_and_attachments!(kwargs)
-      # Convert symbol keys to strings in blocks, attachments, and slack_options for JSON
-      # serialization. This ensures they're serializable for async jobs (Sidekiq/ActiveJob) —
-      # Sidekiq's strict argument checking rejects symbol keys nested in job args at enqueue time.
-      normalize_for_async_serialization!(kwargs, :blocks)
-      normalize_for_async_serialization!(kwargs, :attachments)
-      normalize_for_async_serialization!(kwargs, :slack_options)
+    def normalize_async_serializable_keys!(kwargs)
+      ASYNC_SERIALIZABLE_KEYS.each { |key| normalize_for_async_serialization!(kwargs, key) }
     end
 
     def normalize_for_async_serialization!(kwargs, key)

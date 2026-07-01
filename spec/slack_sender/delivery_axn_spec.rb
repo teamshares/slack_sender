@@ -890,6 +890,31 @@ RSpec.describe SlackSender::DeliveryAxn do
 
       action_class.call(profile:, channel: "C123456", text:, slack_options: { channel: "C_EVIL", text: "overridden" })
     end
+
+    it "does not let slack_options fill an absent managed key (thread_ts)" do
+      # Regression: managed keys must win even when absent. thread_ts is nil here, so compact_blank
+      # drops it from params; without excluding managed keys from the passthrough, slack_options[:thread_ts]
+      # would leak through and bypass the managed thread_ts: contract.
+      expect(client_dbl).to receive(:chat_postMessage) do |**params|
+        expect(params).to include(unfurl_links: false)
+        expect(params).not_to have_key(:thread_ts)
+      end.and_return("ts" => "1.0")
+
+      action_class.call(profile:, channel: "C123456", text:, slack_options: { thread_ts: "999.999", unfurl_links: false })
+    end
+
+    it "deep-symbolizes nested slack_options keys (round-trips async string-keyed args)" do
+      # The async path deep-stringifies slack_options before enqueue; post_message must deep-symbolize
+      # so nested option hashes reach Slack with symbol keys intact, matching the direct-call path.
+      expect(client_dbl).to receive(:chat_postMessage) do |**params|
+        expect(params[:metadata]).to eq(event_type: "x", event_payload: { id: 1 })
+      end.and_return("ts" => "1.0")
+
+      action_class.call(
+        profile:, channel: "C123456", text:,
+        slack_options: { "metadata" => { "event_type" => "x", "event_payload" => { "id" => 1 } } }
+      )
+    end
   end
 
   describe "InvalidArgumentsError" do

@@ -9,6 +9,10 @@ module SlackSender
   class DeliveryAxn
     include Axn
 
+    # chat.postMessage keys SlackSender owns. slack_options may never set these — even when a
+    # managed key is blank (and thus dropped by compact_blank), the passthrough must not fill it.
+    MANAGED_POST_MESSAGE_KEYS = %i[channel text blocks attachments icon_emoji thread_ts].freeze
+
     # Class method modules (extend)
     extend AsyncConfiguration
 
@@ -24,16 +28,14 @@ module SlackSender
     # and on_exception reporting are unchanged.
     error "Unable to send Slack message"
 
-    # InvalidArgumentsError raised from a preprocess lambda arrives wrapped in
-    # Axn::ContractViolation::PreprocessingError — unwrap it to surface the original message.
-    # (A direct InvalidArgumentsError raise needs no handler of its own: it's a SlackSender::Error,
-    # so the resolver below already covers it.)
-    error(if: ->(exception:) { exception.is_a?(Axn::ContractViolation::PreprocessingError) && exception.cause.is_a?(InvalidArgumentsError) }) { |e| e.cause.message }
-
-    # Surface SlackSender::Error messages (InvalidArgumentsError, the re-raised missing-scope
-    # error, etc.) on result.error so they get the base prefix too. Message presentation only —
-    # these stay exception-bucket (still reported + retried like any other StandardError).
-    error(if: SlackSender::Error, &:message)
+    # Surface the underlying SlackSender::Error's message on result.error so it gets the base
+    # prefix too (InvalidArgumentsError, the re-raised missing-scope error, etc.). A direct raise
+    # matches on the exception itself; one raised from a preprocess lambda arrives wrapped in an
+    # Axn::ContractViolation::PreprocessingError, so #unwrapped_slack_error unwraps the cause. One
+    # resolver handles both cases, so there is no ordering dependency between separate handlers.
+    # Message presentation only — these stay exception-bucket (still reported + retried like any
+    # other StandardError).
+    error(if: ->(exception:) { unwrapped_slack_error(exception) }) { |exception| unwrapped_slack_error(exception).message }
 
     expects :profile, type: Profile, preprocess: lambda { |p|
       # If given a string/symbol (profile name), look it up in the registry
@@ -230,11 +232,27 @@ module SlackSender
         thread_ts:,
       }.compact_blank
 
-      # Merge caller passthrough options, but let our managed keys win.
-      params = slack_options.symbolize_keys.merge(params) if slack_options.present?
+      # Merge caller passthrough options. Managed keys always win: strip them from the passthrough
+      # first, so a blank managed key (dropped by compact_blank above) can't be shadowed by a
+      # same-named slack_options key. deep_symbolize_keys mirrors the deep_stringify_keys applied at
+      # enqueue (Profile#normalize_for_async_serialization!), so nested option hashes (e.g. metadata:)
+      # round-trip with symbol keys intact rather than staying string-keyed after the async hop.
+      if slack_options.present?
+        passthrough = slack_options.deep_symbolize_keys.except(*MANAGED_POST_MESSAGE_KEYS)
+        params = passthrough.merge(params)
+      end
 
       response = client.chat_postMessage(**params)
       expose thread_ts: response["ts"]
+    end
+
+    # Returns the SlackSender::Error carried by an exception — the exception itself, or the
+    # unwrapped cause of an Axn preprocessing wrapper — or nil if there is none.
+    def unwrapped_slack_error(exception)
+      return exception if exception.is_a?(SlackSender::Error)
+      return exception.cause if exception.is_a?(Axn::ContractViolation::PreprocessingError) && exception.cause.is_a?(SlackSender::Error)
+
+      nil
     end
   end
 end
