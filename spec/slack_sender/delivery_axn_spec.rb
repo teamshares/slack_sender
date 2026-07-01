@@ -795,19 +795,11 @@ RSpec.describe SlackSender::DeliveryAxn do
   # Canonical, exact-string coverage of every failure mode's `result.error`, locking the
   # base-message prefix join (axn base `error "Unable to send Slack message"`) so no awkward
   # prefix/suffix mangling can sneak in. `eq` (not `include`) is deliberate here.
+  # Note: the argument-validation-failure and bare-error-code cases are already covered exactly
+  # (same setup, same `eq` assertion) by "validation (before block)" > "when content is blank"
+  # and "error message parsing" > "when SlackError has nil response" above — not duplicated here.
   describe "base error message prefixing" do
     before { allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false) }
-
-    context "argument validation failure (InvalidArgumentsError reason)" do
-      subject(:result) { action_class.call(profile:, channel:) } # no content provided
-
-      it "prefixes the validation reason with the base message" do
-        expect(result).not_to be_ok
-        expect(result.error).to eq(
-          "Unable to send Slack message: Must provide at least one of: text, blocks, attachments, or files",
-        )
-      end
-    end
 
     context "Slack API error with full detail" do
       subject(:result) { action_class.call(profile:, channel:, text:) }
@@ -832,23 +824,6 @@ RSpec.describe SlackSender::DeliveryAxn do
           "Unable to send Slack message: invalid_arguments | needed=channel | provided=text | " \
           "Invalid channel provided; Channel does not exist",
         )
-      end
-    end
-
-    context "Slack API error with only a bare error code" do
-      subject(:result) { action_class.call(profile:, channel:, text:) }
-
-      before do
-        slack_error = Slack::Web::Api::Errors::SlackError.new("unknown_error")
-        allow(slack_error).to receive(:response).and_return(nil)
-        allow(slack_error).to receive(:error).and_return("unknown_error")
-        allow(slack_error).to receive(:response_metadata).and_return(nil)
-        allow(client_dbl).to receive(:chat_postMessage).and_raise(slack_error)
-      end
-
-      it "prefixes the bare code" do
-        expect(result).not_to be_ok
-        expect(result.error).to eq("Unable to send Slack message: unknown_error")
       end
     end
 
