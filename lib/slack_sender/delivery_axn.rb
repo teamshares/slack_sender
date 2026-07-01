@@ -24,14 +24,15 @@ module SlackSender
     # and on_exception reporting are unchanged.
     error "Unable to send Slack message"
 
-    # Expose InvalidArgumentsError message directly (these errors skip retries)
-    # Handle both direct raises and raises from preprocess lambdas (wrapped in PreprocessingError)
-    error(if: InvalidArgumentsError, &:message)
+    # InvalidArgumentsError raised from a preprocess lambda arrives wrapped in
+    # Axn::ContractViolation::PreprocessingError — unwrap it to surface the original message.
+    # (A direct InvalidArgumentsError raise needs no handler of its own: it's a SlackSender::Error,
+    # so the resolver below already covers it.)
     error(if: ->(exception:) { exception.is_a?(Axn::ContractViolation::PreprocessingError) && exception.cause.is_a?(InvalidArgumentsError) }) { |e| e.cause.message }
 
-    # Surface SlackSender::Error messages (e.g. the re-raised missing-scope error) on result.error
-    # so they get the base prefix too. Message presentation only — these stay exception-bucket
-    # (still reported + retried like any other StandardError), exactly as before.
+    # Surface SlackSender::Error messages (InvalidArgumentsError, the re-raised missing-scope
+    # error, etc.) on result.error so they get the base prefix too. Message presentation only —
+    # these stay exception-bucket (still reported + retried like any other StandardError).
     error(if: SlackSender::Error, &:message)
 
     expects :profile, type: Profile, preprocess: lambda { |p|
