@@ -37,9 +37,11 @@ The bot must be invited to the channel.
 Your Slack app is missing required OAuth scopes. The error message will tell you which scope is needed:
 
 ```
-Slack API missing_scope error: required scope 'files:write' is not granted.
-Add this scope to your Slack app at https://api.slack.com/apps and reinstall the app.
+Missing required Slack scope 'files:write'. Add this scope to your Slack app at
+https://api.slack.com/apps and reinstall the app.
 ```
+
+(When sending a text message, this is prefixed with `"Unable to send Slack message: "`.)
 
 **To fix:**
 
