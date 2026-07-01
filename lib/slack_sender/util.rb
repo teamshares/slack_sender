@@ -13,6 +13,17 @@ module SlackSender
       NON_RETRYABLE_CHANNEL_ERRORS.any? { |klass| exception.is_a?(klass) }
     end
 
+    # True if the exception is a permanent InvalidArgumentsError — either raised directly, or
+    # wrapped by axn in an Axn::ContractViolation::PreprocessingError (which happens when it is
+    # raised from an `expects ... preprocess:` lambda, e.g. an unknown channel). The async worker
+    # re-raises result.exception, so the wrapped form is what the retry hooks see. Such jobs can
+    # never succeed on retry, so both async backends use this to discard them.
+    def self.invalid_arguments_error?(exception)
+      return true if exception.is_a?(SlackSender::InvalidArgumentsError)
+
+      exception.is_a?(Axn::ContractViolation::PreprocessingError) && exception.cause.is_a?(SlackSender::InvalidArgumentsError)
+    end
+
     # Checks if kwargs represent an explicit blank text-only call (no other content keys).
     # Used to treat such calls as no-ops rather than errors.
     # @param kwargs [Hash] The keyword arguments to check

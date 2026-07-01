@@ -25,16 +25,21 @@ module SlackSender
           # is class_eval'd onto the generated AxnSidekiqWorker).
           async :sidekiq, retry: 5, dead: false do
             sidekiq_retry_in do |_count, exception|
-              # Don't retry invalid arguments
-              next :discard if exception.is_a?(SlackSender::InvalidArgumentsError)
+              # Don't retry invalid arguments (incl. an InvalidArgumentsError raised from a
+              # preprocess lambda, which the worker re-raises wrapped in a PreprocessingError).
+              next :discard if SlackSender::Util.invalid_arguments_error?(exception)
 
               SlackSender::Util.parse_retry_delay_from_exception(exception)
             end
           end
         when :active_job
           async :active_job do
-            # Skip retries for invalid arguments - these will never succeed
+            # Skip retries for invalid arguments - these will never succeed. discard_on matches by
+            # class, so also discard the PreprocessingError wrapper axn raises when an
+            # InvalidArgumentsError comes from a preprocess lambda (e.g. an unknown channel);
+            # preprocessing/contract violations are deterministic and never succeed on retry.
             discard_on SlackSender::InvalidArgumentsError
+            discard_on Axn::ContractViolation::PreprocessingError
 
             retry_on StandardError, wait: :exponentially_longer, attempts: 5 do |_job, exception|
               retry_behavior = SlackSender::Util.parse_retry_delay_from_exception(exception)

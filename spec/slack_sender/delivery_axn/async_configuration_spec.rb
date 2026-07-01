@@ -12,7 +12,7 @@ RSpec.describe SlackSender::DeliveryAxn::AsyncConfiguration do
 
     # This simulates what the sidekiq_retry_in block does
     def simulate_retry_in_block(exception)
-      return :discard if exception.is_a?(SlackSender::InvalidArgumentsError)
+      return :discard if SlackSender::Util.invalid_arguments_error?(exception)
 
       SlackSender::Util.parse_retry_delay_from_exception(exception)
     end
@@ -114,6 +114,24 @@ RSpec.describe SlackSender::DeliveryAxn::AsyncConfiguration do
       it "returns :discard for InvalidArgumentsError (skip retries)" do
         error = SlackSender::InvalidArgumentsError.new("No content provided")
         expect(retry_in_block.call(0, error)).to eq(:discard)
+      end
+
+      it "returns :discard for an InvalidArgumentsError wrapped in a PreprocessingError" do
+        # Mirrors an unknown channel raised from the :channel preprocess lambda: axn wraps it and
+        # the worker re-raises the wrapper, so the hook must unwrap to still discard it.
+        wrapped =
+          begin
+            begin
+              raise SlackSender::InvalidArgumentsError, "Unknown channel provided: :foo"
+            rescue SlackSender::InvalidArgumentsError
+              raise Axn::ContractViolation::PreprocessingError, "preprocessing failed"
+            end
+          rescue Axn::ContractViolation::PreprocessingError => e
+            e
+          end
+
+        expect(wrapped.cause).to be_a(SlackSender::InvalidArgumentsError)
+        expect(retry_in_block.call(0, wrapped)).to eq(:discard)
       end
 
       it "does not discard transient StandardErrors (allow retries)" do

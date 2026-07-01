@@ -51,6 +51,26 @@ RSpec.describe SlackSender::Notifier do
     end
   end
 
+  describe "notify with slack_options passthrough" do
+    let(:notifier_class) do
+      Class.new(described_class) do
+        notify do
+          channel :notifications
+          text { "https://example.com/runbook" }
+          slack_options unfurl_links: false, unfurl_media: false
+        end
+      end
+    end
+
+    it "forwards slack_options from the notify block to chat_postMessage" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(text: "https://example.com/runbook", unfurl_links: false, unfurl_media: false),
+      )
+
+      notifier_class.call
+    end
+  end
+
   describe "notify with expects" do
     let(:notifier_class) do
       Class.new(described_class) do

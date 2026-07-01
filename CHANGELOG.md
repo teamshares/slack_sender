@@ -16,7 +16,9 @@
   diverge.
 - Requires a release of upstream `axn` that includes `Axn::Configurable` (PRO-2769) and the error
   message presentation behavior from PRO-2820 (#132) and PRO-2832 (#134) — the base/reason prefix
-  and nested-`call!` header aggregation that the base-message behavior below relies on.
+  and nested-`call!` header aggregation that the base-message behavior below relies on. The gemspec
+  runtime dependency lower bound is raised to `axn >= 0.1.0-alpha.4.3` accordingly, so consumers
+  can't resolve an older `axn` and `NameError` on `require`.
 - **Behavior change:** failed deliveries now carry a consistent base message on `result.error`.
   Every failure reason is prefixed as `"Unable to send Slack message: <reason>"`, and unexpected
   errors with no specific reason handler surface `"Unable to send Slack message"` instead of axn's
@@ -34,7 +36,13 @@
   checks before the message is ever sent. A call with blank `text:` but a non-empty
   `slack_options:` is no longer treated as a no-op (previously it was silently dropped, matching
   the existing blank-text/blocks/attachments/files no-op check, which `slack_options` was missing
-  from).
+  from). `slack_options` is also available in the `Notifier` `notify do … end` DSL
+  (`slack_options unfurl_links: false`).
+- **Behavior change:** async deliveries that fail argument validation inside a `preprocess` lambda
+  (e.g. an unknown channel) are now discarded instead of retried. `axn` wraps such errors in an
+  `Axn::ContractViolation::PreprocessingError`, so the previous `InvalidArgumentsError`-only
+  Sidekiq `sidekiq_retry_in` / ActiveJob `discard_on` checks missed them and burned all 5 retries
+  on a permanently-invalid job.
 
 ## [0.1.0] - 2026-02-19
 
