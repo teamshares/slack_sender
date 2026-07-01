@@ -19,7 +19,9 @@ module SlackSender
 
       private
 
-      def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank? && file_ids.blank?
+      # slack_options counts as content here, mirroring Util.blank_text_only?: a blank-text call
+      # carrying passthrough options must reach post_message rather than be short-circuited to done!.
+      def content_blank? = text.blank? && blocks.blank? && attachments.blank? && files.blank? && file_ids.blank? && slack_options.blank?
 
       def explicit_blank_text_only?
         # Caller explicitly passed `text:` but it's blank, and no other content.

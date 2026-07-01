@@ -891,6 +891,18 @@ RSpec.describe SlackSender::DeliveryAxn do
       action_class.call(profile:, channel: "C123456", text:, slack_options: { channel: "C_EVIL", text: "overridden" })
     end
 
+    it "sends (does not no-op) when text is blank but slack_options is present" do
+      # Consistency with Util.blank_text_only?, which counts slack_options: a blank-text call
+      # carrying slack_options must reach chat_postMessage, not be dropped by DeliveryAxn's
+      # own blank-content short-circuit.
+      expect(client_dbl).to receive(:chat_postMessage) do |**params|
+        expect(params).to include(unfurl_links: false)
+      end.and_return("ts" => "1.0")
+
+      result = action_class.call(profile:, channel: "C123456", text: "", slack_options: { unfurl_links: false })
+      expect(result).to be_ok
+    end
+
     it "does not let slack_options fill an absent managed key (thread_ts)" do
       # Regression: managed keys must win even when absent. thread_ts is nil here, so compact_blank
       # drops it from params; without excluding managed keys from the passthrough, slack_options[:thread_ts]
