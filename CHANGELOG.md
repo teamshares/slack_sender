@@ -25,7 +25,10 @@
 - Add a `slack_options:` passthrough hash for forwarding arbitrary `chat.postMessage` options
   (`unfurl_links`, `unfurl_media`, `reply_broadcast`, `metadata`, …) straight to Slack. Managed
   keys (channel/text/blocks/attachments/icon_emoji/thread_ts) take precedence; applies to the
-  text-post path only, not file uploads.
+  text-post path only, not file uploads. Like `blocks`/`attachments`, `slack_options` is
+  deep-stringified before an async job is enqueued, so a symbol-keyed hash (e.g.
+  `slack_options: { unfurl_links: false }`) doesn't get rejected by Sidekiq's strict argument
+  checks before the message is ever sent.
 
 ## [0.1.0] - 2026-02-19
 

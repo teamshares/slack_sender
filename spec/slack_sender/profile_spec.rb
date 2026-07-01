@@ -610,6 +610,40 @@ RSpec.describe SlackSender::Profile do
         end
       end
 
+      context "with slack_options containing symbol keys" do
+        it "converts symbol keys to string keys for JSON serialization" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async) do |kwargs|
+            expect(kwargs[:slack_options]).to be_a(Hash)
+            expect(kwargs[:slack_options].keys).to all(be_a(String))
+            expect(kwargs[:slack_options]["unfurl_links"]).to eq(false)
+          end
+
+          profile.call(channel: "C123", text: "test", slack_options: { unfurl_links: false })
+        end
+      end
+
+      context "with nil slack_options" do
+        it "does not raise error" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            profile: "test_profile",
+            channel: "C123",
+            text: "test",
+          )
+          profile.call(channel: "C123", text: "test", slack_options: nil)
+        end
+      end
+
+      context "with empty slack_options hash" do
+        it "does not raise error" do
+          expect(SlackSender::DeliveryAxn).to receive(:call_async).with(
+            profile: "test_profile",
+            channel: "C123",
+            text: "test",
+          )
+          profile.call(channel: "C123", text: "test", slack_options: {})
+        end
+      end
+
       context "with file uploads" do
         let(:file_content) { StringIO.new("file content") }
         let(:file_uploader) { instance_double(SlackSender::FileUploader) }

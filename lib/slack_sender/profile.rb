@@ -285,10 +285,12 @@ module SlackSender
     end
 
     def preprocess_blocks_and_attachments!(kwargs)
-      # Convert symbol keys to strings in blocks and attachments for JSON serialization
-      # This ensures they're serializable for async jobs (Sidekiq/ActiveJob)
+      # Convert symbol keys to strings in blocks, attachments, and slack_options for JSON
+      # serialization. This ensures they're serializable for async jobs (Sidekiq/ActiveJob) —
+      # Sidekiq's strict argument checking rejects symbol keys nested in job args at enqueue time.
       normalize_for_async_serialization!(kwargs, :blocks)
       normalize_for_async_serialization!(kwargs, :attachments)
+      normalize_for_async_serialization!(kwargs, :slack_options)
     end
 
     def normalize_for_async_serialization!(kwargs, key)
