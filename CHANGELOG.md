@@ -34,9 +34,11 @@
   deep-stringified before an async job is enqueued, so a symbol-keyed hash (e.g.
   `slack_options: { unfurl_links: false }`) doesn't get rejected by Sidekiq's strict argument
   checks before the message is ever sent. A call with blank `text:` but a non-empty
-  `slack_options:` is no longer treated as a no-op (previously it was silently dropped, matching
-  the existing blank-text/blocks/attachments/files no-op check, which `slack_options` was missing
-  from). `slack_options` is also available in the `Notifier` `notify do … end` DSL
+  `slack_options:` (and no real content) now fails fast with the `NO_CONTENT_PROVIDED` validation
+  error instead of being silently dropped as a no-op — `slack_options` are message modifiers, not
+  content, so forwarding a content-less call to Slack would only return `no_text` and burn async
+  retries. The error is an `InvalidArgumentsError`, so async jobs discard it rather than retrying.
+  `slack_options` is also available in the `Notifier` `notify do … end` DSL
   (`slack_options unfurl_links: false`).
 - **Behavior change:** async deliveries that fail argument validation inside a `preprocess` lambda
   (e.g. an unknown channel) are now discarded instead of retried. `axn` wraps such errors in an

@@ -891,16 +891,15 @@ RSpec.describe SlackSender::DeliveryAxn do
       action_class.call(profile:, channel: "C123456", text:, slack_options: { channel: "C_EVIL", text: "overridden" })
     end
 
-    it "sends (does not no-op) when text is blank but slack_options is present" do
-      # Consistency with Util.blank_text_only?, which counts slack_options: a blank-text call
-      # carrying slack_options must reach chat_postMessage, not be dropped by DeliveryAxn's
-      # own blank-content short-circuit.
-      expect(client_dbl).to receive(:chat_postMessage) do |**params|
-        expect(params).to include(unfurl_links: false)
-      end.and_return("ts" => "1.0")
+    it "fails fast (does not no-op or hit Slack) when only slack_options is present" do
+      # slack_options are modifiers, not content. A content-less call must neither be silently
+      # dropped as a no-op nor forwarded to Slack (which returns no_text and burns async retries);
+      # it fails fast with NO_CONTENT_PROVIDED, which is discarded on the async backends.
+      expect(client_dbl).not_to receive(:chat_postMessage)
 
       result = action_class.call(profile:, channel: "C123456", text: "", slack_options: { unfurl_links: false })
-      expect(result).to be_ok
+      expect(result).not_to be_ok
+      expect(result.error).to eq("Unable to send Slack message: #{SlackSender::ErrorMessages::NO_CONTENT_PROVIDED}")
     end
 
     it "does not let slack_options fill an absent managed key (thread_ts)" do
