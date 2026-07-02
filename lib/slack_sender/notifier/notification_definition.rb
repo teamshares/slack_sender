@@ -30,8 +30,11 @@ module SlackSender
         # Resolve payload
         resolved_payload = payload.transform_values { |v| resolve(v, notifier) }.compact
 
-        # Validate: at least one payload field
-        raise ArgumentError, "Missing payload in notify block. Add `text`, `blocks`, `attachments`, or `files`." if resolved_payload.empty?
+        # Validate: at least one real content field. slack_options are modifiers, not content, so a
+        # block that sets only them (or whose dynamic content resolver returned nil) has no payload
+        # and must fail fast here rather than enqueue a job that later fails with NO_CONTENT_PROVIDED.
+        content_payload = resolved_payload.except(*NotificationDSL::PASSTHROUGH_FIELDS)
+        raise ArgumentError, "Missing payload in notify block. Add `text`, `blocks`, `attachments`, or `files`." if content_payload.empty?
 
         # Resolve profile if specified
         resolved_profile = profile ? resolve(profile, notifier) : nil

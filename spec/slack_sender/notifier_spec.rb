@@ -69,6 +69,21 @@ RSpec.describe SlackSender::Notifier do
 
       notifier_class.call
     end
+
+    it "raises Missing payload when the block sets only slack_options (no real content)" do
+      only_options_class = Class.new(described_class) do
+        notify do
+          channel :notifications
+          slack_options unfurl_links: false
+        end
+      end
+
+      expect(client_dbl).not_to receive(:chat_postMessage)
+      result = only_options_class.call
+      expect(result).not_to be_ok
+      expect(result.exception).to be_a(ArgumentError)
+      expect(result.exception.message).to match(/Missing payload/)
+    end
   end
 
   describe "notify with expects" do
