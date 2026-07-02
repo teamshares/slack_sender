@@ -46,13 +46,20 @@ module SlackSender
               # Otherwise, let ActiveJob use its default retry behavior
             end
 
-            # Skip retries for invalid arguments - these will never succeed. discard_on matches by
-            # class, so also discard the PreprocessingError wrapper axn raises when an
-            # InvalidArgumentsError comes from a preprocess lambda (e.g. an unknown channel);
-            # preprocessing/contract violations are deterministic and never succeed on retry.
-            # Declared after retry_on so these specific handlers take precedence.
+            # Skip retries for invalid arguments - these will never succeed. Declared after retry_on
+            # so this specific handler takes precedence over the catch-all above.
             discard_on SlackSender::InvalidArgumentsError
-            discard_on Axn::ContractViolation::PreprocessingError
+
+            # An InvalidArgumentsError raised from a preprocess lambda (e.g. an unknown channel)
+            # arrives wrapped in a PreprocessingError, which discard_on can't match by cause. Unwrap
+            # only those to the InvalidArgumentsError so the discard_on above catches them (no
+            # retries); every other preprocessing error propagates unchanged to retry_on/reporting,
+            # mirroring the Sidekiq path (Util.invalid_arguments_error?).
+            around_perform do |_job, block|
+              block.call
+            rescue Axn::ContractViolation::PreprocessingError => e
+              raise SlackSender::Util.invalid_arguments_error?(e) ? e.cause : e
+            end
           end
         end
       end
