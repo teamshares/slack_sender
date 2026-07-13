@@ -1,6 +1,13 @@
 ## [Unreleased]
 
-* N/A
+- `sandbox_mode` is now a per-class-overridable setting. An Axn action using the `:slack` strategy
+  can opt in/out of sandbox for its own sends via `configure(:slack_sender) { |c| c.sandbox_mode = false }`
+  (the axn `PRO-2880` namespaced-config DSL); the override is resolved at the origin action when it
+  sends, threaded down to `DeliveryAxn`, and inherits into subclasses. Actions that declare none are
+  unaffected and follow global config. Applies to the strategy delivery path only, not
+  `SlackSender.group_link`. Internally, `Configuration#sandbox_mode` moved to the `Axn::Configurable`
+  DSL (callable default preserving the `Rails.env`-derived behavior); `sandbox_mode?` is unchanged.
+  Requires an `axn` with `Axn::Configurable` namespaced config (PRO-2880).
 
 ## [0.1.1] - 2026-06-26
 

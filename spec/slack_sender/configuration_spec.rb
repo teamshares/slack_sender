@@ -81,6 +81,40 @@ RSpec.describe SlackSender::Configuration do
         it { expect(config.sandbox_mode?).to be true }
       end
     end
+
+    context "as a per-class overridable setting" do
+      let(:action_class) { Class.new.include(Axn) }
+
+      it "resolves the global value when no per-class override is set" do
+        allow(SlackSender.config).to receive(:sandbox_mode).and_return(true)
+        expect(described_class.resolve_override_for(action_class, :sandbox_mode)).to be true
+      end
+
+      it "resolves a per-class override set via configure(:slack_sender)" do
+        action_class.configure(:slack_sender) { |c| c.sandbox_mode = false }
+        expect(described_class.resolve_override_for(action_class, :sandbox_mode)).to be false
+      end
+
+      describe ".class_override" do
+        it "reports [false, nil] when the class declares no override" do
+          expect(described_class.class_override(action_class, :sandbox_mode)).to eq([false, nil])
+        end
+
+        it "reports [true, value] — including an explicit false — when overridden" do
+          action_class.configure(:slack_sender) { |c| c.sandbox_mode = false }
+          expect(described_class.class_override(action_class, :sandbox_mode)).to eq([true, false])
+        end
+
+        it "finds an override declared on an ancestor" do
+          action_class.configure(:slack_sender) { |c| c.sandbox_mode = false }
+          expect(described_class.class_override(Class.new(action_class), :sandbox_mode)).to eq([true, false])
+        end
+
+        it "returns [false, nil] for a non-class origin" do
+          expect(described_class.class_override("not a class", :sandbox_mode)).to eq([false, nil])
+        end
+      end
+    end
   end
 
   describe "#sandbox_default_behavior" do

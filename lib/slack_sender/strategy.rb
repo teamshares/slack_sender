@@ -86,10 +86,17 @@ module SlackSender
 
           raise ArgumentError, "No channel(s) specified and no default channel configured" unless channel || channels
 
+          # Resolve this action's per-class sandbox override (configure(:slack_sender)) at the origin,
+          # where the action class is known, and thread it down. :inherit when unset leaves global
+          # config in charge — unchanged for every action that doesn't opt in.
+          found, override = SlackSender::Configuration.class_override(self.class, :sandbox_mode)
+          sandbox_mode = found ? override : :inherit
+          target = SlackSender.profile(profile)
+
           if channels
-            SlackSender.profile(profile).public_send(method, channels:, **merged)
+            target.public_send(method, channels:, sandbox_mode:, **merged)
           else
-            SlackSender.profile(profile).public_send(method, channel:, **merged)
+            target.public_send(method, channel:, sandbox_mode:, **merged)
           end
         end
       end

@@ -6,6 +6,12 @@ module SlackSender
     # Only the simple settings are declared here; everything bespoke below stays hand-written.
     extend Axn::Configurable::Settings
 
+    # Per-class overrides (e.g. `sandbox_mode`) live under the :slack_sender namespace, reached via
+    # `MyAction.configure(:slack_sender) { |c| c.sandbox_mode = false }` on any `use :slack` action.
+    # Must precede any `overridable: true` setting.
+    config_namespace :slack_sender
+    overridable_config_source { SlackSender.config }
+
     SUPPORTED_ASYNC_BACKENDS = %i[sidekiq active_job].freeze
     SUPPORTED_SANDBOX_BEHAVIORS = %i[noop redirect passthrough].freeze
 
@@ -24,21 +30,42 @@ module SlackSender
     # When false: app/slack_notifiers/foo.rb defines Foo (standard Rails behavior)
     setting :use_slack_notifiers_namespace, default: true
 
-    attr_writer :sandbox_mode
+    # Whether messages are redirected/suppressed for non-production. A callable default derives from
+    # Rails.env on each read when unset; an explicit true/false wins; nil/unset re-derives. Marked
+    # overridable so an individual action can opt in/out of sandbox for its own sends via
+    # `configure(:slack_sender)` (resolved in the strategy and threaded down to DeliveryAxn).
+    setting :sandbox_mode,
+            default: -> { defined?(Rails) && Rails.respond_to?(:env) ? !Rails.env.production? : true },
+            callable: true,
+            overridable: true
 
     def initialize
       # Bespoke settings (not backed by the DSL) need their defaults set here.
       @max_async_file_upload_size = DEFAULT_MAX_ASYNC_FILE_UPLOAD_SIZE
     end
 
-    def sandbox_mode?
-      return @sandbox_mode unless @sandbox_mode.nil?
+    # Predicate form of the sandbox_mode setting (the DSL class flavor generates only the bare
+    # reader/writer). Retained as the public API used throughout the codebase.
+    def sandbox_mode? = !!sandbox_mode
 
-      if defined?(Rails) && Rails.respond_to?(:env)
-        !Rails.env.production?
-      else
-        true
+    # Returns [found, value] for the per-class `name` override declared via `configure(:slack_sender)`
+    # on `origin` (or the nearest ancestor), found=false when none. Reads axn's per-class override
+    # store directly: axn exposes resolution (`resolve_override_for`) but not presence, and the
+    # delivery path must diverge from global config *only* when an action actually opted in.
+    def self.class_override(origin, name)
+      return [false, nil] unless origin.is_a?(Module)
+
+      klass = origin
+      while klass.is_a?(Module)
+        if klass.instance_variable_defined?(:@_axn_config_overrides)
+          slot = klass.instance_variable_get(:@_axn_config_overrides)[config_namespace]
+          return [true, slot[name]] if slot&.key?(name)
+        end
+        break unless klass.is_a?(Class) && klass.superclass
+
+        klass = klass.superclass
       end
+      [false, nil]
     end
 
     def async_backend

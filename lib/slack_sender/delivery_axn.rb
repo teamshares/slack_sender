@@ -76,6 +76,11 @@ module SlackSender
     # not file uploads (a different endpoint with a different option set).
     expects :slack_options, type: Hash, optional: true
 
+    # Per-action sandbox override, resolved from the origin action's configure(:slack_sender) and
+    # threaded down by the strategy. Absent (nil) on the direct SlackSender.call path — then the
+    # global SlackSender.config.sandbox_mode? applies, as before.
+    expects :sandbox_mode, type: :boolean, optional: true
+
     exposes :thread_ts, type: String, optional: true
 
     def call
@@ -106,10 +111,13 @@ module SlackSender
 
     # Sandbox behavior handling
     def effective_sandbox_behavior
-      return nil unless SlackSender.config.sandbox_mode?
+      return nil unless sandbox_mode_enabled?
 
       profile.resolved_sandbox_behavior
     end
+
+    # A per-action override (threaded from the strategy) wins; otherwise fall back to global config.
+    def sandbox_mode_enabled? = sandbox_mode.nil? ? SlackSender.config.sandbox_mode? : sandbox_mode
 
     def sandbox_noop? = effective_sandbox_behavior == :noop
     def sandbox_redirect? = effective_sandbox_behavior == :redirect

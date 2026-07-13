@@ -70,6 +70,24 @@ SlackSender.call(channel: :ops_alerts, text: "Alert!") # Explicit channel
 
 To prevent accidental notifications in development or staging environments, you can enable sandbox mode. When active, all messages—regardless of their target channel—are redirected to a single "sandbox" channel. This ensures you can test notifications safely without spamming real users.
 
+#### Per-action sandbox override
+
+Sandbox mode is normally global (derived from `Rails.env`, or set via `SlackSender.config.sandbox_mode = …`). An individual Axn action that uses the `:slack` strategy can override it for its own sends via the axn `configure(:slack_sender)` DSL — useful when one action must always deliver (or always be sandboxed) regardless of the global setting:
+
+```ruby
+class CriticalPageNotifier
+  include Axn
+  use :slack, channel: :on_call
+
+  # Always deliver, even in a sandboxed (non-production) environment.
+  configure(:slack_sender) { |c| c.sandbox_mode = false }
+
+  def call = slack!("Pager fired 🔥")
+end
+```
+
+The override is resolved when the action sends and inherits into subclasses (a subclass can set its own). Actions that don't declare one are unaffected and follow the global config as before. It applies to the `:slack` strategy delivery path only, not the standalone `SlackSender.group_link` helper.
+
 ---
 
 ## Rich Messages

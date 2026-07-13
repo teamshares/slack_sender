@@ -103,8 +103,11 @@ module SlackSender
 
     public
 
-    def call(**)
-      enabled, kwargs = enabled_and_preprocessed_kwargs(**)
+    # sandbox_mode: threads a per-action sandbox override down to DeliveryAxn (resolved by the
+    # strategy from the caller's configure(:slack_sender)). :inherit means "not overridden" — omit
+    # it so DeliveryAxn falls back to global config, preserving behavior for every other caller.
+    def call(sandbox_mode: :inherit, **kwargs)
+      enabled, kwargs = enabled_and_preprocessed_kwargs(**kwargs)
       return false unless enabled
 
       # Validate async backend is configured and available
@@ -120,6 +123,8 @@ module SlackSender
               "Profile must be registered before using async delivery. Register it with SlackSender.register(name, config)"
       end
 
+      kwargs[:sandbox_mode] = sandbox_mode unless sandbox_mode == :inherit
+
       if kwargs[:channels]
         dispatch_to_channels(kwargs)
       else
@@ -129,11 +134,13 @@ module SlackSender
       true
     end
 
-    def call!(**)
-      enabled, kwargs = enabled_and_preprocessed_kwargs(**)
+    def call!(sandbox_mode: :inherit, **kwargs)
+      enabled, kwargs = enabled_and_preprocessed_kwargs(**kwargs)
       return false unless enabled
 
       raise ArgumentError, ErrorMessages::MULTI_CHANNEL_SYNC_NOT_SUPPORTED if kwargs[:channels]
+
+      kwargs[:sandbox_mode] = sandbox_mode unless sandbox_mode == :inherit
 
       DeliveryAxn.call!(profile: self, **kwargs).thread_ts
     end

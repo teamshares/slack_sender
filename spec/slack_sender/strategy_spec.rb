@@ -402,6 +402,49 @@ RSpec.describe SlackSender::Strategy do
     end
   end
 
+  describe "per-class sandbox_mode override via configure(:slack_sender)" do
+    before do
+      # Global sandbox ON with the default :noop behavior, so — absent a per-class override —
+      # a send is dropped (no API call). The profile has no sandbox config, so it resolves :noop.
+      SlackSender::ProfileRegistry.register(:sandbox_test, { token: "t", channels: { alerts: "C0300000000" } })
+      allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+    end
+
+    let(:plain_action) do
+      build_axn do
+        use :slack, channel: :alerts, profile: :sandbox_test
+        def call = slack!("hi")
+      end
+    end
+
+    let(:overriding_action) do
+      build_axn do
+        use :slack, channel: :alerts, profile: :sandbox_test
+        configure(:slack_sender) { |c| c.sandbox_mode = false }
+        def call = slack!("hi")
+      end
+    end
+
+    it "no-ops (no API call) when the action has no override and global sandbox is on" do
+      expect(client_dbl).not_to receive(:chat_postMessage)
+      plain_action.call
+    end
+
+    it "delivers when the action sets sandbox_mode false, overriding global sandbox" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(channel: "C0300000000", text: "hi"),
+      ).and_return("ts" => "1.0")
+
+      overriding_action.call
+    end
+
+    it "inherits the override into subclasses (nearest wins)" do
+      subclass = Class.new(overriding_action)
+      expect(client_dbl).to receive(:chat_postMessage).and_return("ts" => "1.0")
+      subclass.call
+    end
+  end
+
   describe "strategy registration" do
     it "is registered as :slack strategy" do
       expect(Axn::Strategies.find(:slack)).to eq(SlackSender::Strategy)
