@@ -1,76 +1,20 @@
-AllCops:
-  TargetRubyVersion: 3.2
-  NewCops: enable
-  SuggestExtensions: false
+inherit_gem:
+  axn: .rubocop.yml
 
-Style/MultilineBlockChain:
-  Enabled: false
-
-Style/SingleLineMethods:
-  Enabled: false
-
-Style/StringLiterals:
-  Enabled: true
-  EnforcedStyle: double_quotes
-
+# Local delta: axn's shared config sets Style/StringLiterals (double_quotes) but not
+# Style/StringLiteralsInInterpolation, which defaults to single_quotes. This gem uses
+# double quotes inside interpolations too, so pin it here.
 Style/StringLiteralsInInterpolation:
   Enabled: true
   EnforcedStyle: double_quotes
 
-Style/Documentation:
-  Enabled: false
-
-Style/TrailingCommaInArguments:
-  EnforcedStyleForMultiline: comma
-
-Style/TrailingCommaInArrayLiteral:
-  EnforcedStyleForMultiline: comma
-
-Style/TrailingCommaInHashLiteral:
-  EnforcedStyleForMultiline: comma
-
-Style/HashSyntax:
-  EnforcedShorthandSyntax: always
-
-Naming/MemoizedInstanceVariableName:
-  Enabled: false
-
-Style/ClassAndModuleChildren:
-  Enabled: false
-
-Style/DoubleNegation:
-  Enabled: false
-
-Naming/MethodParameterName:
-  AllowedNames: e, on, id, if, as
-
-Metrics/BlockLength:
-  Max: 50
-  Exclude:
-    - 'spec/**/*'
-    - '*.gemspec'
-
-Metrics/ClassLength:
-  Max: 150
-
+# Local deltas: hold this gem to tighter Metrics limits than axn's shared
+# defaults (axn: MethodLength 70 / ClassLength 250 / AbcSize 60), sized to
+# this gem's own high-water marks. Profile carries a targeted per-class
+# disable for the 150-line ClassLength cap.
 Metrics/MethodLength:
   Max: 30
-
-Layout/LineLength:
-  Max: 160
-
-Naming/VariableNumber:
-  Exclude:
-    - 'spec/**/*'
-
-Metrics/PerceivedComplexity:
-  Max: 20
-
+Metrics/ClassLength:
+  Max: 150
 Metrics/AbcSize:
   Max: 32
-
-Metrics/CyclomaticComplexity:
-  Max: 20
-
-Metrics/ParameterLists:
-  Max: 10
