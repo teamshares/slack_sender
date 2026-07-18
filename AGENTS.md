@@ -18,6 +18,12 @@ base/reason prefixing).
 - `Gemfile.lock` is gitignored; CI always resolves fresh. `axn` is pinned to `branch: "main"` —
   re-run tests after `bundle update axn` if it may have moved.
 
+## Internal notes vs. user-facing docs
+
+Superpowers plans/specs and any internal design drafts go in `internal-docs/`
+(`plans/`, `specs/`) — overrides the `docs/superpowers/*` default and is excluded
+from the packaged gem. `docs/` is user-facing only (README guides; future VitePress site).
+
 ## Error/success message wording
 
 `DeliveryAxn` declares base `error "Unable to send Slack message"` (prefixes every reason on
