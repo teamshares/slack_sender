@@ -16,6 +16,7 @@ gem "sidekiq"
 
 # Misc/default
 gem "irb"
+gem "lefthook", "~> 1.7" # Git-hook manager (pre-commit RuboCop on staged files)
 gem "rake", "~> 13.0"
 # Match Ruby default gem to avoid "already initialized constant" warnings
 gem "rdoc", "~> 7.2"

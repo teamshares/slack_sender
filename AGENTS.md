@@ -15,6 +15,9 @@ base/reason prefixing).
 - TDD: failing test first.
 - No hard Rails dependency — guard `Rails`/`ActiveRecord`/`ActiveJob` refs with `defined?(...)`.
 - `bundle exec rake` (rspec + rubocop) before done.
+- `bin/setup` installs a lefthook pre-commit hook that runs RuboCop (`--force-exclusion`, check-only)
+  on staged Ruby files and blocks the commit on any offense — fix + re-stage, it does not autocorrect.
+  `git commit --no-verify` skips it; CI runs the full `rake` regardless.
 - `Gemfile.lock` is gitignored; CI always resolves fresh. `axn` is pinned to `branch: "main"` —
   re-run tests after `bundle update axn` if it may have moved.
 

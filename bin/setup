@@ -4,6 +4,11 @@ IFS=$'\n\t'
 set -vx
 
 bundle install
-yarn install
+
+# Install git hooks (pre-commit RuboCop lint on staged files); config lives in lefthook.yml.
+# Migration: older setups pointed core.hooksPath at husky's .husky/_ dir — unset it so lefthook
+# manages .git/hooks (harmless no-op on fresh clones).
+git config --unset core.hooksPath 2>/dev/null || true
+bundle exec lefthook install
 
 # Do any other automated setup that you need to do here
