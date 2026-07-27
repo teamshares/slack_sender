@@ -6,7 +6,13 @@ require "rubocop/rake_task"
 
 RSpec::Core::RakeTask.new(:spec)
 
-RuboCop::RakeTask.new
+# Scope RuboCop to this gem's own code. CI (bundler-cache) installs gems into an
+# in-repo vendor/bundle, and a dependency's own .rubocop.yml — slack-ruby-client's
+# `require`s rubocop-performance/-rake/-rspec — would otherwise be read during target
+# scanning and crash on those absent plugins. Linting vendored gems is never intended.
+RuboCop::RakeTask.new do |task|
+  task.patterns = %w[lib spec bin Rakefile Gemfile slack_sender.gemspec]
+end
 
 task default: %i[spec rubocop]
 
