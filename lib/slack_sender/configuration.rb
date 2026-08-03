@@ -30,13 +30,13 @@ module SlackSender
     # When false: app/slack_notifiers/foo.rb defines Foo (standard Rails behavior)
     setting :use_slack_notifiers_namespace, default: true
 
-    # Whether messages are redirected/suppressed for non-production. A callable default derives from
-    # Rails.env on each read when unset; an explicit true/false wins; nil/unset re-derives. Marked
-    # overridable so an individual action can opt in/out of sandbox for its own sends via
-    # `configure(:slack_sender)` (resolved in the strategy and threaded down to DeliveryAxn).
+    # Whether messages are redirected/suppressed for non-production. The Proc default is dynamic:
+    # axn's Configurable re-derives it from Rails.env on every read while the setting is unset. An
+    # explicit true/false assignment wins and is stored. Marked overridable so an individual action
+    # can opt in/out of sandbox for its own sends via `configure(:slack_sender)` (resolved in the
+    # strategy and threaded down to DeliveryAxn).
     setting :sandbox_mode,
             default: -> { defined?(Rails) && Rails.respond_to?(:env) ? !Rails.env.production? : true },
-            callable: true,
             overridable: true
 
     def initialize

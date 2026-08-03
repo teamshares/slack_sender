@@ -6,7 +6,7 @@
   sends, threaded down to `DeliveryAxn`, and inherits into subclasses. Actions that declare none are
   unaffected and follow global config. Applies to the strategy delivery path only, not
   `SlackSender.group_link`. Internally, `Configuration#sandbox_mode` moved to the `Axn::Configurable`
-  DSL (callable default preserving the `Rails.env`-derived behavior); `sandbox_mode?` is unchanged.
+  DSL (a dynamic Proc `default:` preserving the `Rails.env`-derived behavior); `sandbox_mode?` is unchanged.
   `sandbox_mode?` is now the DSL-generated predicate reader (PRO-2888) rather than a hand-written
   alias. Requires an `axn` with `Axn::Configurable` namespaced config (PRO-2880) and predicate
   readers (PRO-2888).
