@@ -34,9 +34,10 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  # axn: a terse convention for business logic. Lower bound is 0.1.0-alpha.4.3, the first version
-  # to define Axn::Configurable (PRO-2769), which lib/slack_sender/configuration.rb references at
-  # require time — earlier versions would NameError on load. See the Gemfile's temporary main pin.
-  spec.add_dependency "axn", ">= 0.1.0-alpha.4.3", "< 0.2.0"
+  # axn: a terse convention for business logic. Lower bound is 0.1.0-alpha.5: the first published
+  # version where a Proc `default:` is dynamic on its own (the `callable:` kwarg was removed), which
+  # `configuration.rb`'s `sandbox_mode` relies on. It also carries the Axn::Configurable namespaced
+  # config (PRO-2880) and DSL-generated predicate readers (PRO-2888) the gem uses.
+  spec.add_dependency "axn", ">= 0.1.0-alpha.5", "< 0.2.0"
   spec.add_dependency "slack-ruby-client"
 end

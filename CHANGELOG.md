@@ -10,6 +10,10 @@
   `sandbox_mode?` is now the DSL-generated predicate reader (PRO-2888) rather than a hand-written
   alias. Requires an `axn` with `Axn::Configurable` namespaced config (PRO-2880) and predicate
   readers (PRO-2888).
+- Source `axn` from the published `0.1.0-alpha.5` release on RubyGems instead of the temporary
+  `github: teamshares/axn, branch: main` git pin. The gemspec lower bound is now `>= 0.1.0-alpha.5`
+  — the first release where a Proc `default:` is dynamic on its own (the `callable:` kwarg removed),
+  which `Configuration#sandbox_mode` relies on. No behavior change.
 
 ## [0.1.1] - 2026-06-26
 

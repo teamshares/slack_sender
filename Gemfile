@@ -5,10 +5,6 @@ source "https://rubygems.org"
 # Specify your gem's dependencies in slacker-rb.gemspec
 gemspec
 
-# PRO-2775: temporarily pin axn to main now that the Axn::Configurable DSL (PRO-2769) is merged.
-# Flip back to the released gem once that change ships in a published version.
-gem "axn", github: "teamshares/axn", branch: "main"
-
 # Development dependencies
 gem "factory_bot", "~> 6.0"
 gem "rspec", "~> 3.0"
