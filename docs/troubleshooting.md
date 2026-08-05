@@ -155,8 +155,8 @@ allow(SlackSender.profile(:default)).to receive(:call!).and_return("1234567890.1
 
 - **Ruby**: >= 3.2.1
 - **Dependencies**:
-  - `axn` (>= 0.1.0-alpha.4.1, < 0.2.0)
-  - `slack-ruby-client` (latest)
+  - `axn` (>= 0.1.0-alpha.5, < 0.2.0)
+  - `slack-ruby-client` (>= 2.7, < 4)
 - **Optional dependencies**:
   - `sidekiq` or `active_job` (for async delivery)
   - `active_storage` (for ActiveStorage::Attachment file support)
