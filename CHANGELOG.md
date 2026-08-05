@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.1.1] - 2026-08-05
 
 - `sandbox_mode` is now a per-class-overridable setting. An Axn action using the `:slack` strategy
   can opt in/out of sandbox for its own sends via `configure(:slack_sender) { |c| c.sandbox_mode = false }`
@@ -14,9 +14,6 @@
   `github: teamshares/axn, branch: main` git pin. The gemspec lower bound is now `>= 0.1.0-alpha.5`
   — the first release where a Proc `default:` is dynamic on its own (the `callable:` kwarg removed),
   which `Configuration#sandbox_mode` relies on. No behavior change.
-
-## [0.1.1] - 2026-06-26
-
 - Adopt the upstream `Axn::Configurable::Settings` DSL for the simple, declarative
   `SlackSender::Configuration` settings (`enabled`, `silence_archived_channel_exceptions`,
   `sandbox_default_behavior`, `use_slack_notifiers_namespace`). Bespoke/computed settings
