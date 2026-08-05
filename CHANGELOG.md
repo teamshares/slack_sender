@@ -27,8 +27,8 @@
 - Requires a release of upstream `axn` that includes `Axn::Configurable` (PRO-2769) and the error
   message presentation behavior from PRO-2820 (#132) and PRO-2832 (#134) — the base/reason prefix
   and nested-`call!` header aggregation that the base-message behavior below relies on. The gemspec
-  runtime dependency lower bound is raised to `axn >= 0.1.0-alpha.4.3` accordingly, so consumers
-  can't resolve an older `axn` and `NameError` on `require`.
+  runtime dependency lower bound is raised to `axn >= 0.1.0-alpha.5` accordingly (see the sourcing
+  note above), so consumers can't resolve an older `axn` and `NameError` on `require`.
 - **Behavior change:** failed deliveries now carry a consistent base message on `result.error`.
   Every failure reason is prefixed as `"Unable to send Slack message: <reason>"`, and unexpected
   errors with no specific reason handler surface `"Unable to send Slack message"` instead of axn's
