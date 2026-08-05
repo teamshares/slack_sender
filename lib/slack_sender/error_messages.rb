@@ -23,10 +23,14 @@ module SlackSender
     FILES_EXCEED_ASYNC_LIMIT = "Total file size (%s bytes) exceeds max_async_file_upload_size (%s bytes). " \
                                "Use SlackSender.call! for synchronous upload, or increase config.max_async_file_upload_size"
 
-    # Slack API scope errors
-    MISSING_SCOPE = "Slack API missing_scope error: required scope '%s' is not granted. " \
+    # Slack API scope errors.
+    # NOTE: these are shared by two call sites with different framing — DeliveryAxn's text-post
+    # path (prefixed by its base message, "Unable to send Slack message: ...") and FileUploader's
+    # async pre-upload path (raised standalone, with no base to attach to). Written as complete,
+    # self-contained sentences so they read correctly either way.
+    MISSING_SCOPE = "Missing required Slack scope '%s'. " \
                     "Add this scope to your Slack app at https://api.slack.com/apps and reinstall the app."
-    MISSING_SCOPE_UNKNOWN = "Slack API missing_scope error (scope not specified in response). " \
+    MISSING_SCOPE_UNKNOWN = "Missing a required Slack scope (not specified in response). " \
                             "Check your Slack app's OAuth scopes at https://api.slack.com/apps"
 
     # File upload errors

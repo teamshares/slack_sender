@@ -26,23 +26,7 @@ module SlackSender
   # Raised for invalid arguments that should not be retried
   # (e.g., missing content, invalid blocks, incompatible options)
   class InvalidArgumentsError < Error; end
-end
 
-require_relative "slack_sender/channel_normalizer"
-require_relative "slack_sender/profile"
-require_relative "slack_sender/profile_registry"
-require_relative "slack_sender/delivery_axn"
-require_relative "slack_sender/file_wrapper"
-require_relative "slack_sender/multi_file_wrapper"
-require_relative "slack_sender/file_uploader"
-require_relative "slack_sender/strategy"
-
-# Register the slack strategy with Axn (before loading Notifier which uses it)
-Axn::Strategies.register(:slack, SlackSender::Strategy)
-
-require_relative "slack_sender/notifier"
-
-module SlackSender
   class << self
     def register(name = nil, **config)
       ProfileRegistry.register(name.presence || :default, config)
@@ -66,6 +50,20 @@ module SlackSender
     def group_link(key) = default_profile.group_link(key)
   end
 end
+
+require_relative "slack_sender/channel_normalizer"
+require_relative "slack_sender/profile"
+require_relative "slack_sender/profile_registry"
+require_relative "slack_sender/delivery_axn"
+require_relative "slack_sender/file_wrapper"
+require_relative "slack_sender/multi_file_wrapper"
+require_relative "slack_sender/file_uploader"
+require_relative "slack_sender/strategy"
+
+# Register the slack strategy with Axn (before loading Notifier which uses it)
+Axn::Strategies.register(:slack, SlackSender::Strategy)
+
+require_relative "slack_sender/notifier"
 
 # Rails integration (if in Rails context)
 require_relative "slack_sender/rails/engine" if defined?(Rails) && Rails.const_defined?(:Engine)

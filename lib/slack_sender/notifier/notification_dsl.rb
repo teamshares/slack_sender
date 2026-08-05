@@ -5,7 +5,11 @@ module SlackSender
     # Builder DSL for the `notify do ... end` block.
     # Collects routing, payload, and condition settings into a NotificationDefinition.
     class NotificationDSL
-      PAYLOAD_FIELDS = %i[text blocks attachments icon_emoji thread_ts files].freeze
+      PAYLOAD_FIELDS = %i[text blocks attachments icon_emoji thread_ts files slack_options].freeze
+
+      # Fields that modify a message rather than constitute its content. A notify block that sets
+      # only these has no real payload, so they don't count toward the "Missing payload" check.
+      PASSTHROUGH_FIELDS = %i[slack_options].freeze
 
       def initialize
         @channels = []

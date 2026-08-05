@@ -63,6 +63,58 @@ RSpec.describe SlackSender::Util do
 
       it { is_expected.to be true }
     end
+
+    context "when text is blank but slack_options present" do
+      let(:kwargs) { { text: "", slack_options: { unfurl_links: false } } }
+
+      it { is_expected.to be false }
+    end
+
+    context "when text is blank and slack_options is empty" do
+      let(:kwargs) { { text: "", slack_options: {} } }
+
+      it { is_expected.to be true }
+    end
+  end
+
+  describe ".invalid_arguments_error?" do
+    it "is true for a direct InvalidArgumentsError" do
+      expect(described_class.invalid_arguments_error?(SlackSender::InvalidArgumentsError.new("bad"))).to be true
+    end
+
+    it "is true for an InvalidArgumentsError wrapped in a PreprocessingError" do
+      wrapped =
+        begin
+          begin
+            raise SlackSender::InvalidArgumentsError, "bad"
+          rescue SlackSender::InvalidArgumentsError
+            raise Axn::ContractViolation::PreprocessingError, "wrapped"
+          end
+        rescue Axn::ContractViolation::PreprocessingError => e
+          e
+        end
+
+      expect(described_class.invalid_arguments_error?(wrapped)).to be true
+    end
+
+    it "is false for a PreprocessingError wrapping a non-InvalidArguments error" do
+      wrapped =
+        begin
+          begin
+            raise SlackSender::Error, "transient"
+          rescue SlackSender::Error
+            raise Axn::ContractViolation::PreprocessingError, "wrapped"
+          end
+        rescue Axn::ContractViolation::PreprocessingError => e
+          e
+        end
+
+      expect(described_class.invalid_arguments_error?(wrapped)).to be false
+    end
+
+    it "is false for an unrelated StandardError" do
+      expect(described_class.invalid_arguments_error?(StandardError.new("boom"))).to be false
+    end
   end
 
   describe ".extract_needed_scope" do

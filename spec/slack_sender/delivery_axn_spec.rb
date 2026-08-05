@@ -87,7 +87,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "fails without other content" do
           expect(result).not_to be_ok
-          expect(result.error).to eq("Must provide at least one of: text, blocks, attachments, or files")
+          expect(result.error).to eq("Unable to send Slack message: Must provide at least one of: text, blocks, attachments, or files")
         end
       end
     end
@@ -140,7 +140,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
       it "fails with error message" do
         expect(result).not_to be_ok
-        expect(result.error).to eq("Must provide at least one of: text, blocks, attachments, or files")
+        expect(result.error).to eq("Unable to send Slack message: Must provide at least one of: text, blocks, attachments, or files")
       end
     end
 
@@ -174,7 +174,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "fails with error message" do
           expect(result).not_to be_ok
-          expect(result.error).to eq("Provided blocks were invalid")
+          expect(result.error).to eq("Unable to send Slack message: Provided blocks were invalid")
         end
       end
 
@@ -211,7 +211,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "fails with error message" do
           expect(result).not_to be_ok
-          expect(result.error).to eq("Cannot provide files with blocks")
+          expect(result.error).to eq("Unable to send Slack message: Cannot provide files with blocks")
         end
       end
 
@@ -220,7 +220,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "fails with error message" do
           expect(result).not_to be_ok
-          expect(result.error).to eq("Cannot provide files with attachments")
+          expect(result.error).to eq("Unable to send Slack message: Cannot provide files with attachments")
         end
       end
 
@@ -229,7 +229,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "fails with error message" do
           expect(result).not_to be_ok
-          expect(result.error).to eq("Cannot provide files with icon_emoji")
+          expect(result.error).to eq("Unable to send Slack message: Cannot provide files with icon_emoji")
         end
       end
 
@@ -260,7 +260,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "fails with error message" do
           expect(result).not_to be_ok
-          expect(result.error).to eq("Cannot provide files with blocks")
+          expect(result.error).to eq("Unable to send Slack message: Cannot provide files with blocks")
         end
       end
 
@@ -269,7 +269,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "fails with error message" do
           expect(result).not_to be_ok
-          expect(result.error).to eq("Cannot provide files with attachments")
+          expect(result.error).to eq("Unable to send Slack message: Cannot provide files with attachments")
         end
       end
 
@@ -278,7 +278,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
         it "fails with error message" do
           expect(result).not_to be_ok
-          expect(result.error).to eq("Cannot provide files with icon_emoji")
+          expect(result.error).to eq("Unable to send Slack message: Cannot provide files with icon_emoji")
         end
       end
 
@@ -715,7 +715,7 @@ RSpec.describe SlackSender::DeliveryAxn do
 
           it "handles nil response gracefully" do
             expect(result).not_to be_ok
-            expect(result.error).to eq("unknown_error")
+            expect(result.error).to eq("Unable to send Slack message: unknown_error")
           end
         end
 
@@ -792,6 +792,142 @@ RSpec.describe SlackSender::DeliveryAxn do
     end
   end
 
+  # Canonical, exact-string coverage of every failure mode's `result.error`, locking the
+  # base-message prefix join (axn base `error "Unable to send Slack message"`) so no awkward
+  # prefix/suffix mangling can sneak in. `eq` (not `include`) is deliberate here.
+  # Note: the argument-validation-failure and bare-error-code cases are already covered exactly
+  # (same setup, same `eq` assertion) by "validation (before block)" > "when content is blank"
+  # and "error message parsing" > "when SlackError has nil response" above — not duplicated here.
+  describe "base error message prefixing" do
+    before { allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false) }
+
+    context "Slack API error with full detail" do
+      subject(:result) { action_class.call(profile:, channel:, text:) }
+
+      before do
+        slack_error = Slack::Web::Api::Errors::SlackError.new("invalid_arguments")
+        allow(slack_error).to receive(:response).and_return(
+          "ok" => false,
+          "error" => "invalid_arguments",
+          "needed" => "channel",
+          "provided" => "text",
+          "response_metadata" => { "messages" => ["Invalid channel provided", "Channel does not exist"] },
+        )
+        allow(slack_error).to receive(:error).and_return("invalid_arguments")
+        allow(slack_error).to receive(:response_metadata).and_return(nil)
+        allow(client_dbl).to receive(:chat_postMessage).and_raise(slack_error)
+      end
+
+      it "prefixes the parsed message and leaves the internal ' | ' joins intact" do
+        expect(result).not_to be_ok
+        expect(result.error).to eq(
+          "Unable to send Slack message: invalid_arguments | needed=channel | provided=text | " \
+          "Invalid channel provided; Channel does not exist",
+        )
+      end
+    end
+
+    context "missing scope (re-raised as SlackSender::Error)" do
+      subject(:result) { action_class.call(profile:, channel:, text:) }
+
+      let(:response_body) { double("body", error: "missing_scope", needed: "chat:write", response_metadata: nil) }
+      let(:response_env) { { request_headers: {}, response_headers: {} } }
+      let(:faraday_response) { instance_double(Faraday::Response, body: response_body, env: response_env) }
+
+      before do
+        allow(client_dbl).to receive(:chat_postMessage).and_raise(
+          Slack::Web::Api::Errors::MissingScope.new("missing_scope", faraday_response),
+        )
+      end
+
+      it "surfaces the scope detail prefixed with the base, reading as a complete sentence either way" do
+        expect(result).not_to be_ok
+        expect(result.error).to eq(
+          "Unable to send Slack message: Missing required Slack scope 'chat:write'. " \
+          "Add this scope to your Slack app at https://api.slack.com/apps and reinstall the app.",
+        )
+      end
+    end
+
+    context "unexpected non-Slack error (no specific reason handler)" do
+      subject(:result) { action_class.call(profile:, channel:, text:) }
+
+      before do
+        allow(client_dbl).to receive(:chat_postMessage).and_raise(RuntimeError.new("internal boom"))
+      end
+
+      it "falls back to the base message alone (not 'Something went wrong', no leaked internals)" do
+        expect(result).not_to be_ok
+        expect(result.error).to eq("Unable to send Slack message")
+      end
+    end
+  end
+
+  describe "slack_options passthrough" do
+    before { allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false) }
+
+    it "forwards arbitrary chat_postMessage options" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(channel: "C123456", text: "Hello, World!", unfurl_links: false, reply_broadcast: true),
+      ).and_return("ts" => "1.0")
+
+      result = action_class.call(profile:, channel: "C123456", text:, slack_options: { unfurl_links: false, reply_broadcast: true })
+      expect(result).to be_ok
+    end
+
+    it "symbolizes string option keys" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(unfurl_media: true),
+      ).and_return("ts" => "1.0")
+
+      action_class.call(profile:, channel: "C123456", text:, slack_options: { "unfurl_media" => true })
+    end
+
+    it "does not let slack_options override managed keys (channel/text)" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(channel: "C123456", text: "Hello, World!"),
+      ).and_return("ts" => "1.0")
+
+      action_class.call(profile:, channel: "C123456", text:, slack_options: { channel: "C_EVIL", text: "overridden" })
+    end
+
+    it "fails fast (does not no-op or hit Slack) when only slack_options is present" do
+      # slack_options are modifiers, not content. A content-less call must neither be silently
+      # dropped as a no-op nor forwarded to Slack (which returns no_text and burns async retries);
+      # it fails fast with NO_CONTENT_PROVIDED, which is discarded on the async backends.
+      expect(client_dbl).not_to receive(:chat_postMessage)
+
+      result = action_class.call(profile:, channel: "C123456", text: "", slack_options: { unfurl_links: false })
+      expect(result).not_to be_ok
+      expect(result.error).to eq("Unable to send Slack message: #{SlackSender::ErrorMessages::NO_CONTENT_PROVIDED}")
+    end
+
+    it "does not let slack_options fill an absent managed key (thread_ts)" do
+      # Regression: managed keys must win even when absent. thread_ts is nil here, so compact_blank
+      # drops it from params; without excluding managed keys from the passthrough, slack_options[:thread_ts]
+      # would leak through and bypass the managed thread_ts: contract.
+      expect(client_dbl).to receive(:chat_postMessage) do |**params|
+        expect(params).to include(unfurl_links: false)
+        expect(params).not_to have_key(:thread_ts)
+      end.and_return("ts" => "1.0")
+
+      action_class.call(profile:, channel: "C123456", text:, slack_options: { thread_ts: "999.999", unfurl_links: false })
+    end
+
+    it "deep-symbolizes nested slack_options keys (round-trips async string-keyed args)" do
+      # The async path deep-stringifies slack_options before enqueue; post_message must deep-symbolize
+      # so nested option hashes reach Slack with symbol keys intact, matching the direct-call path.
+      expect(client_dbl).to receive(:chat_postMessage) do |**params|
+        expect(params[:metadata]).to eq(event_type: "x", event_payload: { id: 1 })
+      end.and_return("ts" => "1.0")
+
+      action_class.call(
+        profile:, channel: "C123456", text:,
+        slack_options: { "metadata" => { "event_type" => "x", "event_payload" => { "id" => 1 } } }
+      )
+    end
+  end
+
   describe "InvalidArgumentsError" do
     describe "raises InvalidArgumentsError for validation failures" do
       shared_examples "raises InvalidArgumentsError" do |error_message|
@@ -802,11 +938,12 @@ RSpec.describe SlackSender::DeliveryAxn do
         it "returns failed result with error message when using call" do
           result = action_class.call(profile:, **call_args)
           expect(result).not_to be_ok
-          # Handle both string (eq) and regex (match) patterns
+          # result.error is prefixed with DeliveryAxn's base message; the raised exception (call!) keeps
+          # the raw message. Handle both string (eq) and regex (match) patterns.
           if error_message.is_a?(Regexp)
             expect(result.error).to match(error_message)
           else
-            expect(result.error).to eq(error_message)
+            expect(result.error).to eq("Unable to send Slack message: #{error_message}")
           end
         end
 

@@ -54,6 +54,22 @@ RSpec.describe SlackSender::Configuration do
       end
     end
 
+    context "when reset to nil after an explicit value" do
+      before { hide_const("Rails") }
+
+      it "re-derives the default rather than storing nil (no silent sandbox disable)" do
+        config.sandbox_mode = false
+        config.sandbox_mode = nil
+        expect(config.sandbox_mode?).to be true
+      end
+
+      it "clears the stored value so the reader returns the default, not nil" do
+        config.sandbox_mode = true
+        config.sandbox_mode = nil
+        expect(config.sandbox_mode).to be true
+      end
+    end
+
     context "when @sandbox_mode is nil (default)" do
       context "when Rails is defined" do
         before do
@@ -81,6 +97,40 @@ RSpec.describe SlackSender::Configuration do
         it { expect(config.sandbox_mode?).to be true }
       end
     end
+
+    context "as a per-class overridable setting" do
+      let(:action_class) { Class.new.include(Axn) }
+
+      it "resolves the global value when no per-class override is set" do
+        allow(SlackSender.config).to receive(:sandbox_mode).and_return(true)
+        expect(described_class.resolve_override_for(action_class, :sandbox_mode)).to be true
+      end
+
+      it "resolves a per-class override set via configure(:slack_sender)" do
+        action_class.configure(:slack_sender) { |c| c.sandbox_mode = false }
+        expect(described_class.resolve_override_for(action_class, :sandbox_mode)).to be false
+      end
+
+      describe ".class_override" do
+        it "reports [false, nil] when the class declares no override" do
+          expect(described_class.class_override(action_class, :sandbox_mode)).to eq([false, nil])
+        end
+
+        it "reports [true, value] — including an explicit false — when overridden" do
+          action_class.configure(:slack_sender) { |c| c.sandbox_mode = false }
+          expect(described_class.class_override(action_class, :sandbox_mode)).to eq([true, false])
+        end
+
+        it "finds an override declared on an ancestor" do
+          action_class.configure(:slack_sender) { |c| c.sandbox_mode = false }
+          expect(described_class.class_override(Class.new(action_class), :sandbox_mode)).to eq([true, false])
+        end
+
+        it "returns [false, nil] for a non-class origin" do
+          expect(described_class.class_override("not a class", :sandbox_mode)).to eq([false, nil])
+        end
+      end
+    end
   end
 
   describe "#sandbox_default_behavior" do
@@ -106,14 +156,14 @@ RSpec.describe SlackSender::Configuration do
     it "raises ArgumentError for unsupported behavior" do
       expect { config.sandbox_default_behavior = :unknown }.to raise_error(
         ArgumentError,
-        /Unsupported sandbox behavior: :unknown/,
+        /sandbox_default_behavior must be one of.*got :unknown/,
       )
     end
 
     it "includes supported behaviors in error message" do
       expect { config.sandbox_default_behavior = :invalid }.to raise_error(
         ArgumentError,
-        /Supported behaviors: \[:noop, :redirect, :passthrough\]/,
+        /must be one of :noop, :redirect, :passthrough/,
       )
     end
   end

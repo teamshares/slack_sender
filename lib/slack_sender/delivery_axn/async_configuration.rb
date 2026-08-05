@@ -19,21 +19,24 @@ module SlackSender
         # Backend is already validated by Configuration#async_backend=
         case backend
         when :sidekiq
-          async :sidekiq, retry: 5, dead: false
-          # Configure Sidekiq-specific retry logic (including skipping retries for InvalidArgumentsError)
-          if defined?(Sidekiq::Job) && respond_to?(:sidekiq_retry_in)
+          # Configure Sidekiq-specific retry logic (including skipping retries for InvalidArgumentsError).
+          # On axn's current Sidekiq adapter the action is not itself a Sidekiq::Job; sidekiq_retry_in is a
+          # worker-subclass hook, so it must be declared inside the `async :sidekiq do…end` block (the block
+          # is class_eval'd onto the generated AxnSidekiqWorker).
+          async :sidekiq, retry: 5, dead: false do
             sidekiq_retry_in do |_count, exception|
-              # Don't retry invalid arguments
-              next :discard if exception.is_a?(SlackSender::InvalidArgumentsError)
+              # Don't retry invalid arguments (incl. an InvalidArgumentsError raised from a
+              # preprocess lambda, which the worker re-raises wrapped in a PreprocessingError).
+              next :discard if SlackSender::Util.invalid_arguments_error?(exception)
 
               SlackSender::Util.parse_retry_delay_from_exception(exception)
             end
           end
         when :active_job
           async :active_job do
-            # Skip retries for invalid arguments - these will never succeed
-            discard_on SlackSender::InvalidArgumentsError
-
+            # ActiveJob reads rescue handlers bottom-to-top (last declared is matched first), so the
+            # catch-all retry_on StandardError MUST be declared before the specific discards below —
+            # otherwise it shadows them and permanent errors burn all attempts.
             retry_on StandardError, wait: :exponentially_longer, attempts: 5 do |_job, exception|
               retry_behavior = SlackSender::Util.parse_retry_delay_from_exception(exception)
               next if retry_behavior == :discard
@@ -41,6 +44,21 @@ module SlackSender
               # If retry_behavior is a number (seconds), schedule retry with that delay
               retry_job wait: retry_behavior.seconds if retry_behavior.is_a?(Numeric) && retry_behavior.positive?
               # Otherwise, let ActiveJob use its default retry behavior
+            end
+
+            # Skip retries for invalid arguments - these will never succeed. Declared after retry_on
+            # so this specific handler takes precedence over the catch-all above.
+            discard_on SlackSender::InvalidArgumentsError
+
+            # An InvalidArgumentsError raised from a preprocess lambda (e.g. an unknown channel)
+            # arrives wrapped in a PreprocessingError, which discard_on can't match by cause. Unwrap
+            # only those to the InvalidArgumentsError so the discard_on above catches them (no
+            # retries); every other preprocessing error propagates unchanged to retry_on/reporting,
+            # mirroring the Sidekiq path (Util.invalid_arguments_error?).
+            around_perform do |_job, block|
+              block.call
+            rescue Axn::ContractViolation::PreprocessingError => e
+              raise SlackSender::Util.invalid_arguments_error?(e) ? e.cause : e
             end
           end
         end

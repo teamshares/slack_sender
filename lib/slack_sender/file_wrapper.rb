@@ -12,8 +12,9 @@ module SlackSender
       # If it's already a FileWrapper, return it as-is
       return file if file.instance_of?(self)
 
-      # If it's a string file path, open it first
-      file = File.open(file) if file.instance_of?(String) && File.exist?(file)
+      # If it's a string file path, open it first. Use the block form so the
+      # file descriptor is closed once initialize has read its content.
+      return File.open(file) { |f| new(f, index) } if file.instance_of?(String) && File.exist?(file)
 
       new(file, index)
     end

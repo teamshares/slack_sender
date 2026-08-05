@@ -1,0 +1,41 @@
+# AGENTS.md
+
+Ruby gem for Slack messaging: background dispatch, retries, sandbox redirection, multi-profile.
+Core action `DeliveryAxn`, `Notifier` base class, `use :slack` strategy — built on
+[Axn](https://github.com/teamshares/axn).
+
+## Axn
+
+Before touching `DeliveryAxn`/`Notifier`/`Strategy`/`error`/`success`/`fail!`/`done!`: run
+`bundle show axn`, read `AGENTS-consuming.md` there (contract, result/failure semantics, message
+base/reason prefixing).
+
+## Rules
+
+- TDD: failing test first.
+- No hard Rails dependency — guard `Rails`/`ActiveRecord`/`ActiveJob` refs with `defined?(...)`.
+- `bundle exec rake` (rspec + rubocop) before done.
+- `bin/setup` installs a lefthook pre-commit hook that runs RuboCop (`--force-exclusion`, check-only)
+  on staged Ruby files and blocks the commit on any offense — fix + re-stage, it does not autocorrect.
+  `git commit --no-verify` skips it; CI runs the full `rake` regardless.
+- `Gemfile.lock` is gitignored; CI always resolves fresh. `axn` is a released RubyGems dependency
+  (gemspec bound `>= 0.1.0-alpha.5, < 0.2.0`); when adopting a newer axn, bump the gemspec lower bound.
+
+## Internal notes vs. user-facing docs
+
+Superpowers plans/specs and any internal design drafts go in `internal-docs/`
+(`plans/`, `specs/`) — overrides the `docs/superpowers/*` default and is excluded
+from the packaged gem. `docs/` is user-facing only (README guides; future VitePress site).
+
+## Error/success message wording
+
+`DeliveryAxn` declares base `error "Unable to send Slack message"` (prefixes every reason on
+`result.error`). `ErrorMessages` constants raised inside `DeliveryAxn`/its resolvers: bare reason,
+no lead-in. Constants raised outside any Axn (`Profile`, `FileUploader`, `MultiFileWrapper`):
+self-contained sentence. A constant shared by both call sites (e.g. `MISSING_SCOPE`) must read
+correctly either way.
+
+## Keep in sync on behavior changes
+
+`README.md` (Features list only), `docs/*.md` (including quoted error strings), `CHANGELOG.md`
+(`[Unreleased]`, flag behavior changes explicitly).

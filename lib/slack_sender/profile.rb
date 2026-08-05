@@ -2,8 +2,6 @@
 
 module SlackSender
   class Profile # rubocop:disable Metrics/ClassLength
-    SUPPORTED_SANDBOX_BEHAVIORS = %i[redirect noop passthrough].freeze
-
     # Valid kwargs accepted by Profile#call / Profile#call!
     # These are validated early (before backgrounding) to catch typos like `test:` instead of `text:`
     VALID_CALL_KWARGS = %i[
@@ -16,8 +14,13 @@ module SlackSender
       thread_ts
       file
       files
+      slack_options
       profile
     ].freeze
+
+    # Keys whose (possibly nested) symbol keys must be stringified before an async enqueue, so
+    # Sidekiq's strict argument checking doesn't reject them. Add new passthrough-style keys here.
+    ASYNC_SERIALIZABLE_KEYS = %i[blocks attachments slack_options].freeze
 
     attr_reader :default_channel, :channels, :user_groups, :slack_client_config, :key, :sandbox
 
@@ -62,13 +65,16 @@ module SlackSender
         user_group: normalize_sandbox_user_group(config[:user_group]),
       }.compact
 
-      # Extract and validate behavior if present
+      # Extract and validate behavior if present. Shares Configuration::SUPPORTED_SANDBOX_BEHAVIORS
+      # (single source of truth) and mirrors its `one_of:` DSL wording, so a mistyped
+      # `sandbox: { behavior: ... }` and a mistyped `config.sandbox_default_behavior =` read the
+      # same way.
       if config[:behavior]
         behavior = config[:behavior].to_sym
-        unless SUPPORTED_SANDBOX_BEHAVIORS.include?(behavior)
+        supported = Configuration::SUPPORTED_SANDBOX_BEHAVIORS
+        unless supported.include?(behavior)
           raise ArgumentError,
-                "Unsupported sandbox behavior: #{behavior.inspect}. " \
-                "Supported behaviors: #{SUPPORTED_SANDBOX_BEHAVIORS.inspect}"
+                "sandbox.behavior must be one of #{supported.map(&:inspect).join(", ")}; got #{behavior.inspect}"
         end
         result[:behavior] = behavior
       end
@@ -97,8 +103,11 @@ module SlackSender
 
     public
 
-    def call(**)
-      enabled, kwargs = enabled_and_preprocessed_kwargs(**)
+    # sandbox_mode: threads a per-action sandbox override down to DeliveryAxn (resolved by the
+    # strategy from the caller's configure(:slack_sender)). :inherit means "not overridden" — omit
+    # it so DeliveryAxn falls back to global config, preserving behavior for every other caller.
+    def call(sandbox_mode: :inherit, **kwargs)
+      enabled, kwargs = enabled_and_preprocessed_kwargs(**kwargs)
       return false unless enabled
 
       # Validate async backend is configured and available
@@ -114,6 +123,8 @@ module SlackSender
               "Profile must be registered before using async delivery. Register it with SlackSender.register(name, config)"
       end
 
+      kwargs[:sandbox_mode] = sandbox_mode unless sandbox_mode == :inherit
+
       if kwargs[:channels]
         dispatch_to_channels(kwargs)
       else
@@ -123,11 +134,13 @@ module SlackSender
       true
     end
 
-    def call!(**)
-      enabled, kwargs = enabled_and_preprocessed_kwargs(**)
+    def call!(sandbox_mode: :inherit, **kwargs)
+      enabled, kwargs = enabled_and_preprocessed_kwargs(**kwargs)
       return false unless enabled
 
       raise ArgumentError, ErrorMessages::MULTI_CHANNEL_SYNC_NOT_SUPPORTED if kwargs[:channels]
+
+      kwargs[:sandbox_mode] = sandbox_mode unless sandbox_mode == :inherit
 
       DeliveryAxn.call!(profile: self, **kwargs).thread_ts
     end
@@ -195,7 +208,7 @@ module SlackSender
         normalize_file_to_files!(kwargs)
         normalize_and_apply_channels!(kwargs)
         validate_and_handle_profile_parameter!(kwargs)
-        preprocess_blocks_and_attachments!(kwargs)
+        normalize_async_serializable_keys!(kwargs)
       end
     end
 
@@ -283,11 +296,8 @@ module SlackSender
       kwargs[:validate_known_channel] = true
     end
 
-    def preprocess_blocks_and_attachments!(kwargs)
-      # Convert symbol keys to strings in blocks and attachments for JSON serialization
-      # This ensures they're serializable for async jobs (Sidekiq/ActiveJob)
-      normalize_for_async_serialization!(kwargs, :blocks)
-      normalize_for_async_serialization!(kwargs, :attachments)
+    def normalize_async_serializable_keys!(kwargs)
+      ASYNC_SERIALIZABLE_KEYS.each { |key| normalize_for_async_serialization!(kwargs, key) }
     end
 
     def normalize_for_async_serialization!(kwargs, key)

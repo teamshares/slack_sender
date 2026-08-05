@@ -372,8 +372,10 @@ RSpec.describe SlackSender::Strategy do
           end
 
           it "validates default channel against the overridden profile" do
-            # :channel_a is not valid in :profile_b, so this should fail
-            expect { action_class.call! }.to raise_error(Axn::Failure, /Unknown channel/)
+            # :channel_a is not valid in :profile_b, so this should fail. The channel is validated
+            # inside the :channel preprocess lambda, so call! re-raises axn's PreprocessingError
+            # (wrapping the InvalidArgumentsError) rather than a bare Axn::Failure.
+            expect { action_class.call! }.to raise_error(Axn::ContractViolation::PreprocessingError, /Unknown channel/)
           end
         end
 
@@ -397,6 +399,49 @@ RSpec.describe SlackSender::Strategy do
           end
         end
       end
+    end
+  end
+
+  describe "per-class sandbox_mode override via configure(:slack_sender)" do
+    before do
+      # Global sandbox ON with the default :noop behavior, so — absent a per-class override —
+      # a send is dropped (no API call). The profile has no sandbox config, so it resolves :noop.
+      SlackSender::ProfileRegistry.register(:sandbox_test, { token: "t", channels: { alerts: "C0300000000" } })
+      allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+    end
+
+    let(:plain_action) do
+      build_axn do
+        use :slack, channel: :alerts, profile: :sandbox_test
+        def call = slack!("hi")
+      end
+    end
+
+    let(:overriding_action) do
+      build_axn do
+        use :slack, channel: :alerts, profile: :sandbox_test
+        configure(:slack_sender) { |c| c.sandbox_mode = false }
+        def call = slack!("hi")
+      end
+    end
+
+    it "no-ops (no API call) when the action has no override and global sandbox is on" do
+      expect(client_dbl).not_to receive(:chat_postMessage)
+      plain_action.call
+    end
+
+    it "delivers when the action sets sandbox_mode false, overriding global sandbox" do
+      expect(client_dbl).to receive(:chat_postMessage).with(
+        hash_including(channel: "C0300000000", text: "hi"),
+      ).and_return("ts" => "1.0")
+
+      overriding_action.call
+    end
+
+    it "inherits the override into subclasses (nearest wins)" do
+      subclass = Class.new(overriding_action)
+      expect(client_dbl).to receive(:chat_postMessage).and_return("ts" => "1.0")
+      subclass.call
     end
   end
 

@@ -70,6 +70,24 @@ SlackSender.call(channel: :ops_alerts, text: "Alert!") # Explicit channel
 
 To prevent accidental notifications in development or staging environments, you can enable sandbox mode. When active, all messages—regardless of their target channel—are redirected to a single "sandbox" channel. This ensures you can test notifications safely without spamming real users.
 
+#### Per-action sandbox override
+
+Sandbox mode is normally global (derived from `Rails.env`, or set via `SlackSender.config.sandbox_mode = …`). An individual Axn action that uses the `:slack` strategy can override it for its own sends via the axn `configure(:slack_sender)` DSL — useful when one action must always deliver (or always be sandboxed) regardless of the global setting:
+
+```ruby
+class CriticalPageNotifier
+  include Axn
+  use :slack, channel: :on_call
+
+  # Always deliver, even in a sandboxed (non-production) environment.
+  configure(:slack_sender) { |c| c.sandbox_mode = false }
+
+  def call = slack!("Pager fired 🔥")
+end
+```
+
+The override is resolved when the action sends and inherits into subclasses (a subclass can set its own). Actions that don't declare one are unaffected and follow the global config as before. It applies to the `:slack` strategy delivery path only, not the standalone `SlackSender.group_link` helper.
+
 ---
 
 ## Rich Messages
@@ -116,6 +134,20 @@ SlackSender.call(
   icon_emoji: "robot"
 )
 ```
+
+### Other `chat.postMessage` Options
+
+First-class options (`text`, `blocks`, `attachments`, `icon_emoji`, `thread_ts`) cover the common cases. For anything else the [`chat.postMessage` endpoint](https://www.rubydoc.info/gems/slack-ruby-client/Slack/Web/Api/Endpoints/Chat#chat_postMessage-instance_method) supports — `unfurl_links`, `unfurl_media`, `reply_broadcast`, `metadata`, etc. — pass a `slack_options:` hash. It is forwarded straight through to Slack:
+
+```ruby
+SlackSender.call(
+  channel: :ops_alerts,
+  text: "https://example.com/runbook",
+  slack_options: { unfurl_links: false, unfurl_media: false }
+)
+```
+
+The managed keys above always take precedence over `slack_options`, so sandbox channel redirection and text formatting can't be accidentally overridden. `slack_options:` applies to text messages only — it is not forwarded on the file-upload path (a different Slack endpoint).
 
 ---
 
@@ -249,6 +281,15 @@ Format user group mentions with `SlackSender.group_link`. This is sandbox-aware 
 SlackSender.group_link(:on_call)
 # => "<!subteam^S1234567890>"
 ```
+
+`group_link` is defined **per profile** — `SlackSender.group_link(...)` is just a convenience that delegates to the default profile. Each profile resolves symbol keys against *its own* `user_groups` registry, so you can format a mention for any registered profile:
+
+```ruby
+SlackSender[:health_insurance].group_link(:benefits_team)
+# => resolves :benefits_team from the :health_insurance profile's user_groups
+```
+
+Passing a string is treated as a raw group ID (no registry lookup), on any profile.
 
 If `sandbox.user_group.replace_with` is configured and the app is in sandbox mode, `group_link` will replace the requested group with the sandbox user_group instead:
 
