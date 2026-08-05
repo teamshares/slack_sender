@@ -1,3 +1,5 @@
+## [Unreleased]
+
 ## [0.1.1] - 2026-08-05
 
 - `sandbox_mode` is now a per-class-overridable setting. An Axn action using the `:slack` strategy

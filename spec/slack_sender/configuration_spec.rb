@@ -54,6 +54,22 @@ RSpec.describe SlackSender::Configuration do
       end
     end
 
+    context "when reset to nil after an explicit value" do
+      before { hide_const("Rails") }
+
+      it "re-derives the default rather than storing nil (no silent sandbox disable)" do
+        config.sandbox_mode = false
+        config.sandbox_mode = nil
+        expect(config.sandbox_mode?).to be true
+      end
+
+      it "clears the stored value so the reader returns the default, not nil" do
+        config.sandbox_mode = true
+        config.sandbox_mode = nil
+        expect(config.sandbox_mode).to be true
+      end
+    end
+
     context "when @sandbox_mode is nil (default)" do
       context "when Rails is defined" do
         before do

@@ -32,12 +32,24 @@ module SlackSender
 
     # Whether messages are redirected/suppressed for non-production. The Proc default is dynamic:
     # axn's Configurable re-derives it from Rails.env on every read while the setting is unset. An
-    # explicit true/false assignment wins and is stored. Marked overridable so an individual action
-    # can opt in/out of sandbox for its own sends via `configure(:slack_sender)` (resolved in the
-    # strategy and threaded down to DeliveryAxn).
+    # explicit true/false wins; an explicit nil resets to the default (custom writer below). Marked
+    # overridable so an individual action can opt in/out of sandbox for its own sends via
+    # `configure(:slack_sender)` (resolved in the strategy and threaded down to DeliveryAxn).
     setting :sandbox_mode,
             default: -> { defined?(Rails) && Rails.respond_to?(:env) ? !Rails.env.production? : true },
             overridable: true
+
+    # nil is a documented value (`Boolean or nil`) meaning "use the default". The DSL writer would
+    # store an explicit nil as-is, making `sandbox_mode?` return `!!nil == false` and silently
+    # disabling sandbox in non-production. Treat an assigned nil as a reset to the dynamic default
+    # (remove the ivar so the Proc default re-derives), matching the pre-DSL hand-written reader.
+    def sandbox_mode=(value)
+      if value.nil?
+        remove_instance_variable(:@sandbox_mode) if instance_variable_defined?(:@sandbox_mode)
+      else
+        @sandbox_mode = value
+      end
+    end
 
     def initialize
       # Bespoke settings (not backed by the DSL) need their defaults set here.

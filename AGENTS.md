@@ -18,8 +18,8 @@ base/reason prefixing).
 - `bin/setup` installs a lefthook pre-commit hook that runs RuboCop (`--force-exclusion`, check-only)
   on staged Ruby files and blocks the commit on any offense — fix + re-stage, it does not autocorrect.
   `git commit --no-verify` skips it; CI runs the full `rake` regardless.
-- `Gemfile.lock` is gitignored; CI always resolves fresh. `axn` is pinned to `branch: "main"` —
-  re-run tests after `bundle update axn` if it may have moved.
+- `Gemfile.lock` is gitignored; CI always resolves fresh. `axn` is a released RubyGems dependency
+  (gemspec bound `>= 0.1.0-alpha.5, < 0.2.0`); when adopting a newer axn, bump the gemspec lower bound.
 
 ## Internal notes vs. user-facing docs
 
