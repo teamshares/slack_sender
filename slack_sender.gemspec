@@ -39,5 +39,9 @@ Gem::Specification.new do |spec|
   # `configuration.rb`'s `sandbox_mode` relies on. It also carries the Axn::Configurable namespaced
   # config (PRO-2880) and DSL-generated predicate readers (PRO-2888) the gem uses.
   spec.add_dependency "axn", ">= 0.1.0-alpha.5", "< 0.2.0"
-  spec.add_dependency "slack-ruby-client"
+  # slack-ruby-client >= 2.7: DeliveryAxn#upload_files_v2 calls `files_upload_v2(files: [...])`
+  # with the Array form, which was added in 2.7.0 (PR #567). Earlier versions only accept a single
+  # file via `filename:`/`content:` and would raise on the `files:` array. Upper bound `< 4` caps
+  # the next major (currently 3.x) so a breaking release can't resolve unvetted.
+  spec.add_dependency "slack-ruby-client", ">= 2.7", "< 4"
 end
