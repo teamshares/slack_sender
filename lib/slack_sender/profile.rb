@@ -74,8 +74,15 @@ module SlackSender
     # sandbox redirection. For inbound consumers (e.g. a Slack webhook handler) that need to match
     # incoming events against the channel DeliveryAxn actually posts to, rather than the configured
     # one.
-    def channel_id(name)
-      resolve_channel(channels.fetch(name.to_sym))
+    #
+    # Defaults to the *global* SlackSender.config.sandbox_mode? — it cannot see a per-action
+    # `configure(:slack_sender) { |c| c.sandbox_mode = ... }` override (DeliveryAxn resolves that
+    # from the sending Axn action's class, which an inbound caller like a webhook handler has no
+    # access to). If the specific send path being mirrored uses such an override, pass its
+    # resolved value as sandbox_mode_enabled: to get an accurate answer; otherwise this is a
+    # best-effort match against the global default.
+    def channel_id(name, sandbox_mode_enabled: SlackSender.config.sandbox_mode?)
+      resolve_channel(channels.fetch(name.to_sym), sandbox_mode_enabled:)
     end
 
     private

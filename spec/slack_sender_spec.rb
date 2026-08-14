@@ -294,6 +294,11 @@ RSpec.describe SlackSender do
         allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
         expect { described_class.channel_id(:unknown) }.to raise_error(KeyError)
       end
+
+      it "forwards sandbox_mode_enabled: to override the global config" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+        expect(described_class.channel_id(:shareholder_support, sandbox_mode_enabled: false)).to eq("C_CONFIGURED")
+      end
     end
 
     context "with profile: kwarg" do

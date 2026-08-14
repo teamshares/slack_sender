@@ -230,6 +230,15 @@ Returns the redirected channel ID when the resolved behavior is `:redirect` and 
 on; the configured channel ID otherwise (including `:noop`/`:passthrough`, since nothing is sent
 there to redirect). Raises `KeyError` for an unregistered channel name.
 
+**Limitation:** by default this checks the *global* `sandbox_mode?`, not a per-action
+`configure(:slack_sender) { |c| c.sandbox_mode = ... }` override — an inbound caller (e.g. a
+webhook controller) has no action class to resolve that override from. If the send path you're
+mirroring uses such an override, pass its resolved value explicitly:
+
+```ruby
+SlackSender.channel_id(:production_alerts, sandbox_mode_enabled: false)
+```
+
 ---
 
 ## Required Slack Scopes

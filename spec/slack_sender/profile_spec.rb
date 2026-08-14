@@ -242,6 +242,25 @@ RSpec.describe SlackSender::Profile do
         expect { profile.channel_id(:unknown_channel) }.to raise_error(KeyError)
       end
     end
+
+    context "with an explicit sandbox_mode_enabled: override" do
+      let(:profile) do
+        build(:profile, channels: { shareholder_support: "C_CONFIGURED" },
+                        sandbox: { channel: { replace_with: "C_SANDBOX" } })
+      end
+
+      it "uses the override instead of the global config, honoring a per-action opt-out" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+
+        expect(profile.channel_id(:shareholder_support, sandbox_mode_enabled: false)).to eq("C_CONFIGURED")
+      end
+
+      it "uses the override instead of the global config, honoring a per-action opt-in" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+
+        expect(profile.channel_id(:shareholder_support, sandbox_mode_enabled: true)).to eq("C_SANDBOX")
+      end
+    end
   end
 
   describe "sandbox configuration validation" do
