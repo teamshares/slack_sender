@@ -215,6 +215,21 @@ SlackSender.register(
 SlackSender.call(channel: :alerts, text: "This goes to production!")
 ```
 
+### Resolving a Channel for Inbound Consumers
+
+Anything reading *inbound* Slack traffic (e.g. a Slack events webhook) needs to know which channel
+a message actually landed in — not the configured one, since sandbox mode may have redirected it.
+`SlackSender.channel_id` applies the same sandbox resolution `DeliveryAxn` uses when sending:
+
+```ruby
+SlackSender.channel_id(:production_alerts)                  # default profile
+SlackSender.channel_id(:production_alerts, profile: :support) # named profile
+```
+
+Returns the redirected channel ID when the resolved behavior is `:redirect` and sandbox mode is
+on; the configured channel ID otherwise (including `:noop`/`:passthrough`, since nothing is sent
+there to redirect). Raises `KeyError` for an unregistered channel name.
+
 ---
 
 ## Required Slack Scopes

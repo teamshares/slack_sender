@@ -55,6 +55,29 @@ module SlackSender
       SlackSender.config.sandbox_default_behavior
     end
 
+    # Resolves a channel through sandbox redirection: the sandbox channel when sandbox mode is
+    # enabled and the resolved behavior is :redirect, the given channel otherwise. :noop and
+    # :passthrough both fall through to the given channel deliberately — :noop sends nothing, so
+    # "the configured channel" is the pragmatic answer for inbound callers asking what channel a
+    # message would land in.
+    #
+    # The single implementation of that decision, shared by DeliveryAxn's send path (which knows
+    # whether sandbox mode is enabled per-action) and #channel_id (the public inbound lookup, which
+    # only has the global config to go on).
+    def resolve_channel(channel, sandbox_mode_enabled: SlackSender.config.sandbox_mode?)
+      return sandbox_channel if sandbox_mode_enabled && resolved_sandbox_behavior == :redirect
+
+      channel
+    end
+
+    # Public: the channel ID a message to a registered channel `name` actually lands in, honoring
+    # sandbox redirection. For inbound consumers (e.g. a Slack webhook handler) that need to match
+    # incoming events against the channel DeliveryAxn actually posts to, rather than the configured
+    # one.
+    def channel_id(name)
+      resolve_channel(channels.fetch(name.to_sym))
+    end
+
     private
 
     def normalize_sandbox_config(config)

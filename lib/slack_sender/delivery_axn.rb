@@ -107,7 +107,6 @@ module SlackSender
 
     # Profile configs
     def slack_client_config = profile.slack_client_config
-    def sandbox_channel = profile.sandbox_channel
 
     # Sandbox behavior handling
     def effective_sandbox_behavior
@@ -134,8 +133,9 @@ module SlackSender
       self.class.info(log_message)
     end
 
-    # Channel resolution
-    memo def channel_to_use = sandbox_redirect? ? sandbox_channel : channel
+    # Channel resolution — delegates to Profile#resolve_channel, the single implementation of the
+    # sandbox-redirect decision, shared with the public SlackSender.channel_id lookup.
+    memo def channel_to_use = profile.resolve_channel(channel, sandbox_mode_enabled: sandbox_mode_enabled?)
     memo def text_to_use
       return text unless sandbox_redirect?
 
