@@ -270,6 +270,60 @@ RSpec.describe SlackSender do
     end
   end
 
+  describe ".channel_id" do
+    let!(:profile) do
+      described_class.register(
+        token: "TEST_TOKEN",
+        channels: { shareholder_support: "C_CONFIGURED" },
+        sandbox: { channel: { replace_with: "C_SANDBOX" } },
+      )
+    end
+
+    context "when default profile is set" do
+      it "delegates to default_profile.channel_id" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+        expect(described_class.channel_id(:shareholder_support)).to eq("C_CONFIGURED")
+      end
+
+      it "honors sandbox redirection" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+        expect(described_class.channel_id(:shareholder_support)).to eq("C_SANDBOX")
+      end
+
+      it "raises KeyError for an unregistered channel name" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+        expect { described_class.channel_id(:unknown) }.to raise_error(KeyError)
+      end
+
+      it "forwards sandbox_mode_enabled: to override the global config" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+        expect(described_class.channel_id(:shareholder_support, sandbox_mode_enabled: false)).to eq("C_CONFIGURED")
+      end
+    end
+
+    context "with profile: kwarg" do
+      let!(:other_profile) do
+        described_class.register(:other_profile,
+                                 token: "OTHER_TOKEN",
+                                 channels: { shareholder_support: "C_OTHER_CONFIGURED" },
+                                 sandbox: { channel: { replace_with: "C_OTHER_SANDBOX" } })
+      end
+
+      it "looks up the channel on the named profile instead of the default" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+        expect(described_class.channel_id(:shareholder_support, profile: :other_profile)).to eq("C_OTHER_CONFIGURED")
+      end
+    end
+
+    context "when the named profile is not registered" do
+      it "raises ProfileNotFound" do
+        expect do
+          described_class.channel_id(:shareholder_support, profile: :nonexistent)
+        end.to raise_error(SlackSender::ProfileNotFound)
+      end
+    end
+  end
+
   describe ".group_link" do
     let!(:profile) do
       described_class.register(

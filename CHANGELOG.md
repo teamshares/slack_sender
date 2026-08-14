@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+- Add `SlackSender.channel_id(name, profile: :default, sandbox_mode_enabled: SlackSender.config.sandbox_mode?)`,
+  exposing sandbox-aware channel resolution publicly. Returns the redirected channel ID when the
+  profile's resolved sandbox behavior is `:redirect` and sandbox mode is on, the configured ID
+  otherwise (including `:noop`/`:passthrough`), and raises `KeyError` for an unregistered channel
+  name. Inbound consumers (e.g. a Slack events webhook) can now match against the channel a
+  message actually landed in instead of reimplementing the redirect rule themselves. `DeliveryAxn`'s
+  send-path channel resolution now delegates to the same `Profile#resolve_channel`, so there is
+  exactly one implementation of the sandbox-redirect decision. Defaults to the *global*
+  `sandbox_mode?` — pass `sandbox_mode_enabled:` explicitly when mirroring a send path that uses a
+  per-action `configure(:slack_sender) { |c| c.sandbox_mode = ... }` override, which an inbound
+  caller has no action class to resolve on its own.
+
 ## [0.1.1] - 2026-08-05
 
 - `sandbox_mode` is now a per-class-overridable setting. An Axn action using the `:slack` strategy

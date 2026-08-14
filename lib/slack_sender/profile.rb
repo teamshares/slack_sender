@@ -55,6 +55,36 @@ module SlackSender
       SlackSender.config.sandbox_default_behavior
     end
 
+    # Resolves a channel through sandbox redirection: the sandbox channel when sandbox mode is
+    # enabled and the resolved behavior is :redirect, the given channel otherwise. :noop and
+    # :passthrough both fall through to the given channel deliberately — :noop sends nothing, so
+    # "the configured channel" is the pragmatic answer for inbound callers asking what channel a
+    # message would land in.
+    #
+    # The single implementation of that decision, shared by DeliveryAxn's send path (which knows
+    # whether sandbox mode is enabled per-action) and #channel_id (the public inbound lookup, which
+    # only has the global config to go on).
+    def resolve_channel(channel, sandbox_mode_enabled: SlackSender.config.sandbox_mode?)
+      return sandbox_channel if sandbox_mode_enabled && resolved_sandbox_behavior == :redirect
+
+      channel
+    end
+
+    # Public: the channel ID a message to a registered channel `name` actually lands in, honoring
+    # sandbox redirection. For inbound consumers (e.g. a Slack webhook handler) that need to match
+    # incoming events against the channel DeliveryAxn actually posts to, rather than the configured
+    # one.
+    #
+    # Defaults to the *global* SlackSender.config.sandbox_mode? — it cannot see a per-action
+    # `configure(:slack_sender) { |c| c.sandbox_mode = ... }` override (DeliveryAxn resolves that
+    # from the sending Axn action's class, which an inbound caller like a webhook handler has no
+    # access to). If the specific send path being mirrored uses such an override, pass its
+    # resolved value as sandbox_mode_enabled: to get an accurate answer; otherwise this is a
+    # best-effort match against the global default.
+    def channel_id(name, sandbox_mode_enabled: SlackSender.config.sandbox_mode?)
+      resolve_channel(channels.fetch(name.to_sym), sandbox_mode_enabled:)
+    end
+
     private
 
     def normalize_sandbox_config(config)

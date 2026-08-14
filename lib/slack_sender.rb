@@ -48,6 +48,7 @@ module SlackSender
     def call(**) = default_profile.call(**)
     def call!(**) = default_profile.call!(**)
     def group_link(key) = default_profile.group_link(key)
+    def channel_id(name, profile: :default, **) = self.profile(profile).channel_id(name, **)
   end
 end
 

@@ -148,6 +148,121 @@ RSpec.describe SlackSender::Profile do
     end
   end
 
+  describe "#resolve_channel" do
+    context "when sandbox mode is not enabled" do
+      it "returns the given channel unchanged" do
+        expect(profile.resolve_channel("C_GIVEN", sandbox_mode_enabled: false)).to eq("C_GIVEN")
+      end
+    end
+
+    context "when sandbox mode is enabled" do
+      context "and resolved behavior is :redirect" do
+        let(:profile) { build(:profile, sandbox: { channel: { replace_with: "C_SANDBOX" } }) }
+
+        it "returns the sandbox channel" do
+          expect(profile.resolve_channel("C_GIVEN", sandbox_mode_enabled: true)).to eq("C_SANDBOX")
+        end
+      end
+
+      context "and resolved behavior is :noop" do
+        let(:profile) { build(:profile, sandbox: { behavior: :noop }) }
+
+        it "returns the given channel unchanged" do
+          expect(profile.resolve_channel("C_GIVEN", sandbox_mode_enabled: true)).to eq("C_GIVEN")
+        end
+      end
+
+      context "and resolved behavior is :passthrough" do
+        let(:profile) { build(:profile, sandbox: { behavior: :passthrough }) }
+
+        it "returns the given channel unchanged" do
+          expect(profile.resolve_channel("C_GIVEN", sandbox_mode_enabled: true)).to eq("C_GIVEN")
+        end
+      end
+    end
+
+    context "when sandbox_mode_enabled is not given" do
+      it "defaults to SlackSender.config.sandbox_mode?" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+        expect(profile.resolve_channel("C_GIVEN")).to eq(profile.sandbox_channel)
+      end
+    end
+  end
+
+  describe "#channel_id" do
+    let(:profile) { build(:profile, channels: { shareholder_support: "C_CONFIGURED" }) }
+
+    context "when sandbox mode is off" do
+      before { allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false) }
+
+      it "returns the configured channel id" do
+        expect(profile.channel_id(:shareholder_support)).to eq("C_CONFIGURED")
+      end
+    end
+
+    context "when sandbox mode is on" do
+      before { allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true) }
+
+      context "and resolved behavior is :redirect" do
+        let(:profile) do
+          build(:profile, channels: { shareholder_support: "C_CONFIGURED" },
+                          sandbox: { channel: { replace_with: "C_SANDBOX" } })
+        end
+
+        it "returns the sandbox channel" do
+          expect(profile.channel_id(:shareholder_support)).to eq("C_SANDBOX")
+        end
+      end
+
+      context "and resolved behavior is :noop" do
+        let(:profile) do
+          build(:profile, channels: { shareholder_support: "C_CONFIGURED" }, sandbox: { behavior: :noop })
+        end
+
+        it "returns the configured channel id (nothing is sent there at all)" do
+          expect(profile.channel_id(:shareholder_support)).to eq("C_CONFIGURED")
+        end
+      end
+
+      context "and resolved behavior is :passthrough" do
+        let(:profile) do
+          build(:profile, channels: { shareholder_support: "C_CONFIGURED" }, sandbox: { behavior: :passthrough })
+        end
+
+        it "returns the configured channel id" do
+          expect(profile.channel_id(:shareholder_support)).to eq("C_CONFIGURED")
+        end
+      end
+    end
+
+    context "with an unregistered channel name" do
+      before { allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false) }
+
+      it "raises KeyError" do
+        expect { profile.channel_id(:unknown_channel) }.to raise_error(KeyError)
+      end
+    end
+
+    context "with an explicit sandbox_mode_enabled: override" do
+      let(:profile) do
+        build(:profile, channels: { shareholder_support: "C_CONFIGURED" },
+                        sandbox: { channel: { replace_with: "C_SANDBOX" } })
+      end
+
+      it "uses the override instead of the global config, honoring a per-action opt-out" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(true)
+
+        expect(profile.channel_id(:shareholder_support, sandbox_mode_enabled: false)).to eq("C_CONFIGURED")
+      end
+
+      it "uses the override instead of the global config, honoring a per-action opt-in" do
+        allow(SlackSender.config).to receive(:sandbox_mode?).and_return(false)
+
+        expect(profile.channel_id(:shareholder_support, sandbox_mode_enabled: true)).to eq("C_SANDBOX")
+      end
+    end
+  end
+
   describe "sandbox configuration validation" do
     context "when behavior is :redirect without channel.replace_with" do
       it "raises ArgumentError at initialization" do
