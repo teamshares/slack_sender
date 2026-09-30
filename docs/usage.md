@@ -321,6 +321,26 @@ SlackSender.call(
 )
 ```
 
+### Escaping Untrusted Values
+
+SlackSender does not escape `text:` or `blocks:` — Slack treats `&`, `<` and `>` as markup, so an interpolated
+value containing one (e.g. a vendor-supplied company name) renders wrong, and a `>` in a link label cuts the
+link short. Wrap each untrusted value in `SlackSender.escape`, which converts those three characters to
+`&amp;`, `&lt;` and `&gt;` (nil becomes `""`):
+
+```ruby
+SlackSender.call(
+  channel: :ops_alerts,
+  text: "<#{company_url}|#{SlackSender.escape(company.name)}> disconnected — cc <@#{owner.slack_id}>"
+)
+```
+
+Escape only the value, never the whole message — deliberate markup (`<url|label>`, `<@U123>`, `<!here>`,
+`<#C123>`) must stay unescaped.
+
+**Limitation:** `text:` is still run through `Slack::Messages::Formatting.markdown`, so an untrusted value
+containing `[label](url)` is still converted into a link. `escape` does not prevent that.
+
 ---
 
 ## Rate Limiting & Retries

@@ -82,6 +82,20 @@ RSpec.describe SlackSender::DeliveryAxn do
         end
       end
 
+      context "with SlackSender.escape'd values interpolated into deliberate markup" do
+        subject(:result) do
+          action_class.call(profile:, channel:, text: "<https://x.test|#{SlackSender.escape("A & B <Co>")}> by <@U123>")
+        end
+
+        it "delivers the entities intact alongside the unescaped markup" do
+          expect(client_dbl).to receive(:chat_postMessage).with(
+            hash_including(text: "<https://x.test|A &amp; B &lt;Co&gt;> by <@U123>"),
+          )
+
+          expect(result).to be_ok
+        end
+      end
+
       context "with nil text" do
         subject(:result) { action_class.call(profile:, channel:, text: nil) }
 
