@@ -49,6 +49,10 @@ module SlackSender
     def call!(**) = default_profile.call!(**)
     def group_link(key) = default_profile.group_link(key)
     def channel_id(name, profile: :default, **) = self.profile(profile).channel_id(name, **)
+
+    # Escapes Slack mrkdwn control characters (&, <, >) in an untrusted value interpolated into
+    # text/blocks. Wrap only the value — deliberate markup (<url|label>, <@U123>, <!here>) must stay raw.
+    def escape(value) = ::Slack::Messages::Formatting.escape(value.to_s)
   end
 end
 

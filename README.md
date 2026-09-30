@@ -78,6 +78,7 @@ That's it. SlackSender handles rate limits, retries, and sandbox redirection (if
 - **Multi-channel delivery** — broadcast to multiple channels efficiently
 - **Sandbox mode** — redirect or suppress messages in non-production environments, with per-action overrides via `configure(:slack_sender)`
 - **Sandbox-aware channel resolution** — `SlackSender.channel_id(:name)` exposes the same sandbox-redirect logic `DeliveryAxn` uses when sending, for inbound consumers (e.g. Slack webhook handlers) matching against the channel a message actually landed in
+- **Escaping untrusted values** — `SlackSender.escape(value)` escapes `&`/`<`/`>` in interpolated values without touching deliberate markup (see [usage](https://github.com/teamshares/slack_sender/blob/main/docs/usage.md#escaping-untrusted-values))
 - **File uploads** — sync and async, with automatic size handling
 - **Multiple profiles** — manage multiple Slack workspaces
 - **Full option passthrough** — forward any [`chat.postMessage`](https://www.rubydoc.info/gems/slack-ruby-client/Slack/Web/Api/Endpoints/Chat#chat_postMessage-instance_method) option via [`slack_options:`](https://github.com/teamshares/slack_sender/blob/main/docs/usage.md#other-chatpostmessage-options)

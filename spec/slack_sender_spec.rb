@@ -324,6 +324,28 @@ RSpec.describe SlackSender do
     end
   end
 
+  describe ".escape" do
+    it "escapes &, < and > as Slack entities" do
+      expect(described_class.escape("A & B <x>")).to eq("A &amp; B &lt;x&gt;")
+    end
+
+    it "keeps an interpolated link label from terminating the link" do
+      expect("<https://x.test|#{described_class.escape("Foo > Bar")}>").to eq("<https://x.test|Foo &gt; Bar>")
+    end
+
+    it "returns clean text unchanged" do
+      expect(described_class.escape("Acme Co")).to eq("Acme Co")
+    end
+
+    it "returns an empty string for nil" do
+      expect(described_class.escape(nil)).to eq("")
+    end
+
+    it "stringifies non-String values" do
+      expect(described_class.escape(42)).to eq("42")
+    end
+  end
+
   describe ".group_link" do
     let!(:profile) do
       described_class.register(

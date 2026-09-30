@@ -11,6 +11,13 @@
   `sandbox_mode?` — pass `sandbox_mode_enabled:` explicitly when mirroring a send path that uses a
   per-action `configure(:slack_sender) { |c| c.sandbox_mode = ... }` override, which an inbound
   caller has no action class to resolve on its own.
+- Add `SlackSender.escape(value)`, which escapes Slack mrkdwn control characters (`&`, `<`, `>` →
+  `&amp;`, `&lt;`, `&gt;`) in an untrusted value interpolated into `text:`/`blocks:` (nil → `""`). This
+  is opt-in and caller-side: wrap only the value, e.g. `"<#{url}|#{SlackSender.escape(company.name)}>"`, so
+  deliberate markup (`<url|label>`, `<@U123>`, `<!here>`) keeps working. No behavior change for
+  existing callers, because nothing is escaped automatically. Known limitation: `text:` still goes through
+  `Slack::Messages::Formatting.markdown`, so `[label](url)` inside an untrusted value is still
+  converted into a link.
 
 ## [0.1.1] - 2026-08-05
 
