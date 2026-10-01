@@ -1,6 +1,9 @@
 inherit_gem:
   axn: .rubocop.yml
 
+AllCops:
+  TargetRubyVersion: 3.3
+
 # Local delta: axn's shared config sets Style/StringLiterals (double_quotes) but not
 # Style/StringLiteralsInInterpolation, which defaults to single_quotes. This gem uses
 # double quotes inside interpolations too, so pin it here.
