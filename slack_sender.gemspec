@@ -13,8 +13,8 @@ Gem::Specification.new do |spec|
   spec.homepage = "https://github.com/teamshares/slack_sender"
   spec.license = "MIT"
 
-  # NOTE: uses endless methods from 3, literal value omission from 3.1, and Axn which requires 3.2.1+
-  spec.required_ruby_version = ">= 3.2.1"
+  # NOTE: uses endless methods from 3 and literal value omission from 3.1; Ruby 3.2 is EOL.
+  spec.required_ruby_version = ">= 3.3"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage

@@ -19,7 +19,7 @@ bundle install
 ```
 
 **Requirements:**
-- Ruby >= 3.2.1
+- Ruby >= 3.3
 - A Slack Bot User OAuth Token with `chat:write` scope (see [Configuration](https://github.com/teamshares/slack_sender/blob/main/docs/configuration.md#required-slack-scopes) for full scope list)
 - For async delivery: Sidekiq or ActiveJob (auto-detected)
 

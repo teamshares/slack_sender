@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+- **[BREAKING]** Require Ruby >= 3.3 (was >= 3.2.1): Ruby 3.2 is end-of-life, and Axn has dropped it. CI now runs Ruby 3.3, 3.4 and 4.0.
 - Add `SlackSender.channel_id(name, profile: :default, sandbox_mode_enabled: SlackSender.config.sandbox_mode?)`,
   exposing sandbox-aware channel resolution publicly. Returns the redirected channel ID when the
   profile's resolved sandbox behavior is `:redirect` and sandbox mode is on, the configured ID
