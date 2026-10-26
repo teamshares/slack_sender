@@ -17,5 +17,5 @@ gem "irb"
 gem "lefthook", "~> 2.0" # Git-hook manager (pre-commit RuboCop on staged files)
 gem "rake", "~> 13.0"
 # Match Ruby default gem to avoid "already initialized constant" warnings
-gem "rdoc", "~> 7.2"
+gem "rdoc", "~> 8.0"
 gem "rubocop", "~> 1.21"
